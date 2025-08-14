@@ -30,7 +30,8 @@ const FIELD_MAPPINGS = {
   completionDone: ['Fertigstellung Bau erfolgt'],
   d2dStart: ['D2D-Vertrieb Start'],
   d2dEnd: ['D2D-Vertrieb Ende'],
-  outdoorFee: ['Outdoor-Pauschale vorhanden']
+  outdoorFee: ['Outdoor-Pauschale vorhanden'],
+  notes: ['Notes'] // Added notes mapping for CSV import
 } as const;
 
 // Utility function to safely get field value with fallback
@@ -82,6 +83,15 @@ function safeParseFloat(value: any, defaultValue: number = 0): number {
   return result;
 }
 
+// Helper function to parse boolean values from various formats
+function safeParseBoolean(value: any): boolean {
+  if (typeof value === 'boolean') return value;
+  if (!value) return false;
+  
+  const strValue = String(value).trim().toLowerCase();
+  return strValue === 'yes' || strValue === 'true' || strValue === '1' || strValue === 'ja';
+}
+
 // Optimized address creation function
 function createAddress(row: any, id: number): Address {
   return {
@@ -98,11 +108,11 @@ function createAddress(row: any, id: number): Address {
     buildingCompany: getFieldValue(row, FIELD_MAPPINGS.buildingCompany),
     kgNumber: getFieldValue(row, FIELD_MAPPINGS.kgNumber),
     completionPlanned: getFieldValue(row, FIELD_MAPPINGS.completionPlanned),
-    completionDone: Boolean(row[FIELD_MAPPINGS.completionDone[0]] || false),
+    completionDone: safeParseBoolean(row[FIELD_MAPPINGS.completionDone[0]] || false),
     d2dStart: getFieldValue(row, FIELD_MAPPINGS.d2dStart),
     d2dEnd: getFieldValue(row, FIELD_MAPPINGS.d2dEnd),
     outdoorFee: getFieldValue(row, FIELD_MAPPINGS.outdoorFee),
-    notes: '',
+    notes: getFieldValue(row, FIELD_MAPPINGS.notes), // Handle notes from CSV import
     imported: true
   };
 }
@@ -238,7 +248,7 @@ export async function importExcelFiles(
   };
 }
 
-// Optimized CSV export function
+// Updated CSV export function to match exact import format
 export async function exportCSVWeb(addresses: Address[]): Promise<void> {
   if (addresses.length === 0) {
     throw new Error('No addresses to export');
@@ -257,23 +267,24 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
       
       for (let j = 0; j < chunk.length; j++) {
         const address = chunk[j];
+        // Use the exact same column names as the import field mappings
         data[i + j] = {
-          'Address Code': address.addressCode || '',
-          'Address': address.address || '',
+          'adrcd-subcd': address.addressCode || '',
+          'Adresse': address.address || '',
           'Region': address.region || '',
-          'Provider': address.ano || '',
+          'ANO': address.ano || '',
           'Status': address.status || '',
-          'Homes': address.homes || 0,
-          'Contract Status': address.contractStatus || 0,
-          'Price': address.price || 0,
-          'Provision Category': address.provisionCategory || '',
-          'Building Company': address.buildingCompany || '',
-          'KG Number': address.kgNumber || '',
-          'Completion Planned': address.completionPlanned || '',
-          'Completion Done': address.completionDone ? 'Yes' : 'No',
-          'D2D Start': address.d2dStart || '',
-          'D2D End': address.d2dEnd || '',
-          'Outdoor Fee': address.outdoorFee || '',
+          'Anzahl der Homes': address.homes || 0,
+          'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet': address.contractStatus || 0,
+          'Preis Standardprodukt (€)': address.price || 0,
+          'Provisions-Kategorie': address.provisionCategory || '',
+          'Baufirma': address.buildingCompany || '',
+          'KG Nummer': address.kgNumber || '',
+          'Fertigstellung Bau (aktueller Plan)': address.completionPlanned || '',
+          'Fertigstellung Bau erfolgt': address.completionDone ? 'Yes' : '',
+          'D2D-Vertrieb Start': address.d2dStart || '',
+          'D2D-Vertrieb Ende': address.d2dEnd || '',
+          'Outdoor-Pauschale vorhanden': address.outdoorFee || '',
           'Notes': address.notes || ''
         };
       }
@@ -295,8 +306,9 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
       RS: '\n' // Record separator
     });
     
-    // Use more efficient blob creation
-    const blob = new Blob([csv], { 
+    // Use more efficient blob creation with BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { 
       type: 'text/csv;charset=utf-8' 
     });
     
