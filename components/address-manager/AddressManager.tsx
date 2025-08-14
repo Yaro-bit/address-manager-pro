@@ -13,10 +13,10 @@ type ImportStats =
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; message?: string; error?: undefined }
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; error: string; message?: undefined };
 
-// Memoized components for better performance
+// Memoized components for better performance - German labels
 const KPI = memo(({ label, value }: { label: string; value: number }) => (
   <div className="text-center p-6 bg-white/70 rounded-2xl border border-gray-200/50 shadow-sm">
-    <div className="text-4xl font-black">{value.toLocaleString()}</div>
+    <div className="text-4xl font-black">{value.toLocaleString('de-DE')}</div>
     <div className="text-sm font-bold text-gray-700">{label}</div>
   </div>
 ));
@@ -30,13 +30,13 @@ const Stat = memo(({ label, value, highlight }: { label: string; value: number; 
   
   return (
     <div className="text-center p-4 bg-white/60 rounded-2xl">
-      <div className={`text-3xl font-black ${color} mb-1`}>{value.toLocaleString()}</div>
+      <div className={`text-3xl font-black ${color} mb-1`}>{value.toLocaleString('de-DE')}</div>
       <div className="text-sm font-medium text-gray-600">{label}</div>
     </div>
   );
 });
 
-// Optimized filtering function
+// Erweiterte Filterfunktion
 const createAddressFilter = (searchTerm: string, filterBy: string) => {
   const searchLower = searchTerm.toLowerCase();
   
@@ -53,18 +53,27 @@ const createAddressFilter = (searchTerm: string, filterBy: string) => {
       if (!matchesSearch) return false;
     }
 
-    // Filter logic with early returns
+    // Erweiterte Filter-Logik
     switch (filterBy) {
-      case 'has_contract': return address.contractStatus > 0;
-      case 'no_contract': return address.contractStatus === 0;
-      case 'in_operation': return (address.status || '').includes('100 In Betrieb');
-      case 'has_notes': return !!address.notes;
-      default: return true;
+      case 'has_contract': 
+        return address.contractStatus > 0;
+      case 'no_contract': 
+        return address.contractStatus === 0;
+      case 'in_operation': 
+        return (address.status || '').includes('100 In Betrieb');
+      case 'has_notes': 
+        return !!address.notes;
+      case 'high_value': 
+        return address.price > 50; // Hoher Wert über 50€
+      case 'large_projects': 
+        return address.homes > 10; // Große Projekte über 10 Homes
+      default: 
+        return true;
     }
   };
 };
 
-// Optimized sorting function
+// Erweiterte Sortierfunktion
 const createAddressSorter = (sortBy: string) => {
   switch (sortBy) {
     case 'region': 
@@ -75,6 +84,8 @@ const createAddressSorter = (sortBy: string) => {
       return (a: Address, b: Address) => b.homes - a.homes;
     case 'price': 
       return (a: Address, b: Address) => b.price - a.price;
+    case 'contract_status': 
+      return (a: Address, b: Address) => b.contractStatus - a.contractStatus;
     default: 
       return () => 0;
   }
@@ -86,8 +97,8 @@ export default function AddressManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all'|'has_contract'|'no_contract'|'in_operation'|'has_notes'>('all');
-  const [sortBy, setSortBy] = useState<'region'|'address'|'homes'|'price'>('region');
+  const [filterBy, setFilterBy] = useState<'all'|'has_contract'|'no_contract'|'in_operation'|'has_notes'|'high_value'|'large_projects'>('all');
+  const [sortBy, setSortBy] = useState<'region'|'address'|'homes'|'price'|'contract_status'>('region');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const [isNative, setIsNative] = useState(false);
 
@@ -116,10 +127,15 @@ export default function AddressManager() {
     return grouped;
   }, [addresses, filterFn, sortFn]);
 
-  // Memoize statistics calculations
+  // Erweiterte Statistik-Berechnungen
   const statistics = useMemo(() => {
     const totalHomes = addresses.reduce((sum, address) => sum + address.homes, 0);
     const withContract = addresses.filter(address => address.contractStatus > 0).length;
+    const withNotes = addresses.filter(address => !!address.notes).length;
+    const highValue = addresses.filter(address => address.price > 50).length;
+    const largeProjects = addresses.filter(address => address.homes > 10).length;
+    const totalValue = addresses.reduce((sum, address) => sum + address.price, 0);
+    
     const completePct = addresses.length === 0 ? 0 : Math.round(
       (addresses.filter(address => address.notes && address.contractStatus > 0).length / addresses.length) * 100
     );
@@ -127,6 +143,10 @@ export default function AddressManager() {
     return {
       totalHomes,
       withContract,
+      withNotes,
+      highValue,
+      largeProjects,
+      totalValue,
       completePct,
       totalAddresses: addresses.length,
       totalRegions: Object.keys(groupedAddresses).length
@@ -181,7 +201,7 @@ export default function AddressManager() {
         imported: newAddresses.length,
         duplicatesSkipped,
         files: files.length,
-        message: 'Data loaded successfully!',
+        message: 'Daten erfolgreich geladen!',
       });
     } catch (error: any) {
       setImportStats({
@@ -189,7 +209,7 @@ export default function AddressManager() {
         imported: 0,
         duplicatesSkipped: 0,
         files: files.length,
-        error: 'Import failed: ' + (error?.message || String(error)),
+        error: 'Import fehlgeschlagen: ' + (error?.message || String(error)),
       });
     } finally {
       setIsImporting(false);
@@ -220,10 +240,10 @@ export default function AddressManager() {
         setSortBy={setSortBy}
       />
 
-      {/* Import status */}
+      {/* Import Status - Deutsche Texte */}
       {isImporting && (
         <div className="my-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
-          <div className="mb-3 font-bold">Import Progress</div>
+          <div className="mb-3 font-bold">Import läuft...</div>
           <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
             <div 
               className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
@@ -234,18 +254,18 @@ export default function AddressManager() {
         </div>
       )}
 
-      {/* Import results */}
+      {/* Import Results - Deutsche Texte */}
       {importStats && (
         <div className={`my-8 rounded-3xl p-6 border ${importStats.error ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'}`}>
           <div className={`flex items-center gap-3 font-bold text-lg ${importStats.error ? 'text-red-800' : 'text-emerald-800'}`}>
             {importStats.error ? <X /> : <Check />}
-            {importStats.error ? 'Import Failed' : (importStats.message || 'Import Successful')}
+            {importStats.error ? 'Import fehlgeschlagen' : (importStats.message || 'Import erfolgreich')}
           </div>
           {!importStats.error && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <Stat label="Total Processed" value={importStats.totalProcessed} />
-              <Stat label="Successfully Imported" value={importStats.imported} highlight="green" />
-              <Stat label="Duplicates Skipped" value={importStats.duplicatesSkipped} highlight="amber" />
+              <Stat label="Verarbeitet" value={importStats.totalProcessed} />
+              <Stat label="Importiert" value={importStats.imported} highlight="green" />
+              <Stat label="Duplikate übersprungen" value={importStats.duplicatesSkipped} highlight="amber" />
             </div>
           )}
           {importStats.error && (
@@ -268,20 +288,32 @@ export default function AddressManager() {
             onUpdate={updateAddress}
           />
 
-          {/* Stats Dashboard */}
+          {/* Stats Dashboard - Deutsche Labels */}
           <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
             <h3 className="text-2xl font-black flex items-center gap-2">
-              <BarChart3 /> Portfolio Analytics {isNative && '• Native'}
+              <BarChart3 /> Portfolio Übersicht
             </h3>
+            
+            {/* Haupt-KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 my-6">
-              <KPI label="Total Addresses" value={statistics.totalAddresses} />
-              <KPI label="Regions" value={statistics.totalRegions} />
-              <KPI label="Total Homes" value={statistics.totalHomes} />
-              <KPI label="With Contract" value={statistics.withContract} />
+              <KPI label="Adressen gesamt" value={statistics.totalAddresses} />
+              <KPI label="Regionen" value={statistics.totalRegions} />
+              <KPI label="Homes gesamt" value={statistics.totalHomes} />
+              <KPI label="Mit Vertrag" value={statistics.withContract} />
             </div>
+
+            {/* Zusätzliche Statistiken */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <Stat label="Mit Notizen" value={statistics.withNotes} highlight="green" />
+              <Stat label="Hoher Wert (>50€)" value={statistics.highValue} highlight="amber" />
+              <Stat label="Große Projekte (>10 Homes)" value={statistics.largeProjects} />
+              <Stat label="Gesamtwert (€)" value={Math.round(statistics.totalValue)} />
+            </div>
+
+            {/* Fortschrittsbalken */}
             <div>
               <div className="flex items-center justify-between mb-2 font-bold">
-                <span>Portfolio Completion</span>
+                <span>Bearbeitungsfortschritt</span>
                 <span>{statistics.completePct}%</span>
               </div>
               <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
@@ -291,7 +323,7 @@ export default function AddressManager() {
                 />
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                Addresses with both notes and contracts are considered complete.
+                Adressen mit Notizen und Vertrag gelten als vollständig bearbeitet.
               </p>
             </div>
           </div>
