@@ -272,6 +272,13 @@ export default function AddressManager() {
       {/* Import Status */}
       {isImporting && (
         <div className="my-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
+          <div className="mb-3 font-bold">Import läuft...</div>
+          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
+              style={{ width: `${importProgress}%` }} 
+            />
+          </div>
           <div className="mt-2 text-sm text-gray-600">{importProgress}%</div>
         </div>
       )}
@@ -366,11 +373,4 @@ export default function AddressManager() {
       )}
     </div>
   );
-}mb-3 font-bold">Import läuft...</div>
-          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
-              style={{ width: `${importProgress}%` }} 
-            />
-          </div>
-          <div className="
+}
