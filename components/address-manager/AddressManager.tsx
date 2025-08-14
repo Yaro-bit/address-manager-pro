@@ -36,56 +36,68 @@ const Stat = memo(({ label, value, highlight }: { label: string; value: number; 
   );
 });
 
-// Erweiterte Filterfunktion
+// Filter-Funktion mit Excel-Spaltennamen
 const createAddressFilter = (searchTerm: string, filterBy: string) => {
   const searchLower = searchTerm.toLowerCase();
   
   return (address: Address) => {
-    // Early return for search optimization
+    // Erweiterte Suche über alle relevanten Excel-Felder
     if (searchTerm) {
       const matchesSearch = 
         address.address.toLowerCase().includes(searchLower) ||
         address.region.toLowerCase().includes(searchLower) ||
         address.notes.toLowerCase().includes(searchLower) ||
         (address.ano || '').toLowerCase().includes(searchLower) ||
-        (address.status || '').toLowerCase().includes(searchLower);
+        (address.status || '').toLowerCase().includes(searchLower) ||
+        (address.buildingCompany || '').toLowerCase().includes(searchLower) ||
+        (address.kgNumber || '').toLowerCase().includes(searchLower) ||
+        (address.provisionCategory || '').toLowerCase().includes(searchLower) ||
+        (address.addressCode || '').toLowerCase().includes(searchLower);
       
       if (!matchesSearch) return false;
     }
 
-    // Erweiterte Filter-Logik
+    // Filter basierend auf Excel-Spalten
     switch (filterBy) {
       case 'has_contract': 
         return address.contractStatus > 0;
       case 'no_contract': 
         return address.contractStatus === 0;
-      case 'in_operation': 
-        return (address.status || '').includes('100 In Betrieb');
+      case 'fertigstellung_erfolgt': 
+        return address.completionDone === true;
       case 'has_notes': 
         return !!address.notes;
       case 'high_value': 
-        return address.price > 50; // Hoher Wert über 50€
+        return address.price > 50;
       case 'large_projects': 
-        return address.homes > 10; // Große Projekte über 10 Homes
+        return address.homes > 10;
+      case 'outdoor_fee': 
+        return !!(address.outdoorFee && address.outdoorFee.trim());
+      case 'provision_category': 
+        return !!(address.provisionCategory && address.provisionCategory.trim());
       default: 
         return true;
     }
   };
 };
 
-// Erweiterte Sortierfunktion
+// Sort-Funktion mit exakten Excel-Spaltennamen
 const createAddressSorter = (sortBy: string) => {
   switch (sortBy) {
-    case 'region': 
+    case 'Region': 
       return (a: Address, b: Address) => a.region.localeCompare(b.region) || a.address.localeCompare(b.address);
-    case 'address': 
+    case 'Adresse': 
       return (a: Address, b: Address) => a.address.localeCompare(b.address);
-    case 'homes': 
+    case 'Anzahl der Homes': 
       return (a: Address, b: Address) => b.homes - a.homes;
-    case 'price': 
+    case 'Preis Standardprodukt (€)': 
       return (a: Address, b: Address) => b.price - a.price;
-    case 'contract_status': 
+    case 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet': 
       return (a: Address, b: Address) => b.contractStatus - a.contractStatus;
+    case 'ANO': 
+      return (a: Address, b: Address) => (a.ano || '').localeCompare(b.ano || '');
+    case 'Status': 
+      return (a: Address, b: Address) => (a.status || '').localeCompare(b.status || '');
     default: 
       return () => 0;
   }
@@ -97,8 +109,8 @@ export default function AddressManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all'|'has_contract'|'no_contract'|'in_operation'|'has_notes'|'high_value'|'large_projects'>('all');
-  const [sortBy, setSortBy] = useState<'region'|'address'|'homes'|'price'|'contract_status'>('region');
+  const [filterBy, setFilterBy] = useState<'all'|'has_contract'|'no_contract'|'fertigstellung_erfolgt'|'has_notes'|'high_value'|'large_projects'|'outdoor_fee'|'provision_category'>('all');
+  const [sortBy, setSortBy] = useState<'Region'|'Adresse'|'Anzahl der Homes'|'Preis Standardprodukt (€)'|'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet'|'ANO'|'Status'>('Region');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const [isNative, setIsNative] = useState(false);
 
@@ -127,11 +139,14 @@ export default function AddressManager() {
     return grouped;
   }, [addresses, filterFn, sortFn]);
 
-  // Erweiterte Statistik-Berechnungen
+  // Erweiterte Statistiken mit Excel-Feldern
   const statistics = useMemo(() => {
     const totalHomes = addresses.reduce((sum, address) => sum + address.homes, 0);
     const withContract = addresses.filter(address => address.contractStatus > 0).length;
     const withNotes = addresses.filter(address => !!address.notes).length;
+    const completionDone = addresses.filter(address => address.completionDone === true).length;
+    const withOutdoorFee = addresses.filter(address => !!(address.outdoorFee && address.outdoorFee.trim())).length;
+    const withProvisionCategory = addresses.filter(address => !!(address.provisionCategory && address.provisionCategory.trim())).length;
     const highValue = addresses.filter(address => address.price > 50).length;
     const largeProjects = addresses.filter(address => address.homes > 10).length;
     const totalValue = addresses.reduce((sum, address) => sum + address.price, 0);
@@ -144,6 +159,9 @@ export default function AddressManager() {
       totalHomes,
       withContract,
       withNotes,
+      completionDone,
+      withOutdoorFee,
+      withProvisionCategory,
       highValue,
       largeProjects,
       totalValue,
@@ -288,7 +306,7 @@ export default function AddressManager() {
             onUpdate={updateAddress}
           />
 
-          {/* Stats Dashboard - Deutsche Labels */}
+          {/* Stats Dashboard - Mit Excel-Feldern */}
           <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
             <h3 className="text-2xl font-black flex items-center gap-2">
               <BarChart3 /> Portfolio Übersicht
@@ -298,15 +316,21 @@ export default function AddressManager() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 my-6">
               <KPI label="Adressen gesamt" value={statistics.totalAddresses} />
               <KPI label="Regionen" value={statistics.totalRegions} />
-              <KPI label="Homes gesamt" value={statistics.totalHomes} />
-              <KPI label="Mit Vertrag" value={statistics.withContract} />
+              <KPI label="Anzahl der Homes" value={statistics.totalHomes} />
+              <KPI label="Vertrag vorhanden" value={statistics.withContract} />
             </div>
 
-            {/* Zusätzliche Statistiken */}
+            {/* Excel-basierte Statistiken */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <Stat label="Fertigstellung erfolgt" value={statistics.completionDone} highlight="green" />
+              <Stat label="Outdoor-Pauschale" value={statistics.withOutdoorFee} />
+              <Stat label="Provisions-Kategorie" value={statistics.withProvisionCategory} />
               <Stat label="Mit Notizen" value={statistics.withNotes} highlight="green" />
-              <Stat label="Hoher Wert (>50€)" value={statistics.highValue} highlight="amber" />
-              <Stat label="Große Projekte (>10 Homes)" value={statistics.largeProjects} />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              <Stat label="Preis >50€" value={statistics.highValue} highlight="amber" />
+              <Stat label="Homes >10" value={statistics.largeProjects} />
               <Stat label="Gesamtwert (€)" value={Math.round(statistics.totalValue)} />
             </div>
 
