@@ -174,7 +174,7 @@ const SortSelect = memo(({
 }) => {
   // PLZ als wichtigste Sortierung
   const sortOptions = useMemo(() => [
-    { value: 'PLZ' as const, label: '📍 Nach PLZ (wichtigste)' },
+    { value: 'PLZ' as const, label: '📍 Nach PLZ' },
     { value: 'Region' as const, label: 'Nach Region' },
     { value: 'Adresse' as const, label: 'Nach Adresse' },
     { value: 'Anzahl der Homes' as const, label: 'Nach Anzahl der Homes' },
