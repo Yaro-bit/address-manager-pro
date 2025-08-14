@@ -1,3 +1,20 @@
-Address Manager Pro is a lightweight Next.js + React + TypeScript app that helps you manage an address portfolio sourced from Excel. It uses Tailwind CSS for UI and works well in a regular browser or inside a Capacitor wrapper. No verified source found.
+## Address Manager Pro
 
-Import .xlsx/.xls files, automatically deduplicate by normalized address, and then search, filter, and sort your data. View items grouped by region, edit notes inline, see simple KPIs, and export to CSV on the web.
+**Address Manager Pro** is a lightweight **Next.js + React + TypeScript** app, fully vibe-coded for a friend’s needs.  
+It helps manage an address portfolio pulled from Excel, with a clean UI built in **Tailwind CSS**.  
+Runs smoothly in a regular browser or wrapped with **Capacitor** for mobile.
+
+---
+
+### Features
+- Import `.xlsx` / `.xls` files  
+- Automatic deduplication by normalized address  
+- Fast search, filter, and sort  
+- Grouped-by-region view  
+- Inline note editing  
+- Simple KPIs overview  
+- CSV export directly from the web
+
+---
+
+**Built for friend, runs for everyone.**
