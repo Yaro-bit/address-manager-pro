@@ -1,0 +1,21 @@
+export type Address = {
+  id: number;
+  addressCode: string;
+  address: string;
+  region: string;
+  ano?: string;
+  status?: string;
+  homes: number;
+  contractStatus: number;
+  price: number;
+  provisionCategory?: string;
+  buildingCompany?: string;
+  kgNumber?: string;
+  completionPlanned?: string;
+  completionDone?: boolean;
+  d2dStart?: string;
+  d2dEnd?: string;
+  outdoorFee?: string;
+  notes: string;
+  imported?: boolean;
+};
