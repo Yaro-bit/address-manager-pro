@@ -3,9 +3,9 @@
 import { Upload, Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
 import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
 
-// Define types for better TypeScript support
-type FilterOption = 'all' | 'has_contract' | 'no_contract' | 'in_operation' | 'has_notes' | 'high_value' | 'large_projects';
-type SortOption = 'region' | 'address' | 'homes' | 'price' | 'contract_status';
+// Define types with exact Excel column names
+type FilterOption = 'all' | 'has_contract' | 'no_contract' | 'fertigstellung_erfolgt' | 'has_notes' | 'high_value' | 'large_projects' | 'outdoor_fee' | 'provision_category';
+type SortOption = 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)' | 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet' | 'ANO' | 'Status';
 
 interface ControlsProps {
   isImporting: boolean;
@@ -21,7 +21,7 @@ interface ControlsProps {
   setSortBy: (v: SortOption) => void;
 }
 
-// Memoized Header component - angepasst für Immobilien/Verkauf
+// Memoized Header component
 const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
   const iconElement = useMemo(() => 
     <Building2 className="w-6 h-6" />, 
@@ -43,7 +43,7 @@ const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
   );
 });
 
-// Memoized Action Buttons component - deutsche Labels
+// Memoized Action Buttons component
 const ActionButtons = memo(({ 
   isImporting, 
   allowExport, 
@@ -97,7 +97,7 @@ const ActionButtons = memo(({
   );
 });
 
-// Memoized Search Input component - deutsche Platzhalter
+// Memoized Search Input component
 const SearchInput = memo(({ 
   searchTerm, 
   onSearchChange 
@@ -114,7 +114,7 @@ const SearchInput = memo(({
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
       <input
         type="text"
-        placeholder="Suche nach Adresse, Region, ANO, Status, Notizen..."
+        placeholder="Suche: Adresse, Region, ANO, Status, Baufirma, KG Nummer..."
         value={searchTerm}
         onChange={handleInputChange}
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300"
@@ -125,7 +125,7 @@ const SearchInput = memo(({
   );
 });
 
-// Memoized Filter Select component - angepasst für Immobiliendaten
+// Memoized Filter Select component mit Excel-Spaltennamen
 const FilterSelect = memo(({ 
   filterBy, 
   onFilterChange 
@@ -133,15 +133,17 @@ const FilterSelect = memo(({
   filterBy: FilterOption;
   onFilterChange: (value: FilterOption) => void;
 }) => {
-  // Memoize filter options to prevent recreation
+  // Filter options basierend auf Excel-Spalten
   const filterOptions = useMemo(() => [
     { value: 'all' as const, label: 'Alle Adressen' },
-    { value: 'has_contract' as const, label: 'Mit Vertrag' },
-    { value: 'no_contract' as const, label: 'Ohne Vertrag' },
-    { value: 'in_operation' as const, label: 'In Betrieb' },
+    { value: 'has_contract' as const, label: 'Vertrag vorhanden oder L1-Angebot gesendet' },
+    { value: 'no_contract' as const, label: 'Kein Vertrag' },
+    { value: 'fertigstellung_erfolgt' as const, label: 'Fertigstellung Bau erfolgt' },
     { value: 'has_notes' as const, label: 'Mit Notizen' },
-    { value: 'high_value' as const, label: 'Hoher Wert (>50€)' },
-    { value: 'large_projects' as const, label: 'Große Projekte (>10 Homes)' }
+    { value: 'high_value' as const, label: 'Preis >50€' },
+    { value: 'large_projects' as const, label: 'Anzahl Homes >10' },
+    { value: 'outdoor_fee' as const, label: 'Outdoor-Pauschale vorhanden' },
+    { value: 'provision_category' as const, label: 'Mit Provisions-Kategorie' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -167,7 +169,7 @@ const FilterSelect = memo(({
   );
 });
 
-// Memoized Sort Select component - angepasst für Verkaufsdaten
+// Memoized Sort Select component mit exakten Excel-Spaltennamen
 const SortSelect = memo(({ 
   sortBy, 
   onSortChange 
@@ -175,13 +177,15 @@ const SortSelect = memo(({
   sortBy: SortOption;
   onSortChange: (value: SortOption) => void;
 }) => {
-  // Memoize sort options to prevent recreation
+  // Sort options mit exakten Excel-Spaltennamen
   const sortOptions = useMemo(() => [
-    { value: 'region' as const, label: 'Nach Region' },
-    { value: 'address' as const, label: 'Nach Adresse' },
-    { value: 'homes' as const, label: 'Nach Anzahl Homes' },
-    { value: 'price' as const, label: 'Nach Preis' },
-    { value: 'contract_status' as const, label: 'Nach Vertragsstatus' }
+    { value: 'Region' as const, label: 'Nach Region' },
+    { value: 'Adresse' as const, label: 'Nach Adresse' },
+    { value: 'Anzahl der Homes' as const, label: 'Nach Anzahl der Homes' },
+    { value: 'Preis Standardprodukt (€)' as const, label: 'Nach Preis Standardprodukt (€)' },
+    { value: 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet' as const, label: 'Nach Vertragsstatus' },
+    { value: 'ANO' as const, label: 'Nach ANO' },
+    { value: 'Status' as const, label: 'Nach Status' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -207,7 +211,7 @@ const SortSelect = memo(({
   );
 });
 
-// Memoized File Input component - unterstützt Excel und CSV
+// Memoized File Input component
 const FileInput = memo(({ 
   onFilesSelected,
   inputRef 
