@@ -3,9 +3,9 @@
 import { Upload, Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
 import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
 
-// Define types with exact Excel column names
-type FilterOption = 'all' | 'has_contract' | 'no_contract' | 'fertigstellung_erfolgt' | 'has_notes' | 'high_value' | 'large_projects' | 'outdoor_fee' | 'provision_category';
-type SortOption = 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)' | 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet' | 'ANO' | 'Status';
+// Fokus auf die wichtigsten Filter
+type FilterOption = 'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes';
+type SortOption = 'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)';
 
 interface ControlsProps {
   isImporting: boolean;
@@ -37,7 +37,7 @@ const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
         <h1 className="text-3xl font-black">
           Adress <span className="text-blue-700">Manager</span>
         </h1>
-        <p className="text-gray-600">Verkaufsadressen verwalten und Fortschritt verfolgen</p>
+        <p className="text-gray-600">Verkaufsadressen nach PLZ verwalten</p>
       </div>
     </div>
   );
@@ -114,7 +114,7 @@ const SearchInput = memo(({
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
       <input
         type="text"
-        placeholder="Suche: Adresse, Region, ANO, Status, Baufirma, KG Nummer..."
+        placeholder="Suche: PLZ, Adresse, Region, Baufirma..."
         value={searchTerm}
         onChange={handleInputChange}
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300"
@@ -125,7 +125,7 @@ const SearchInput = memo(({
   );
 });
 
-// Memoized Filter Select component mit Excel-Spaltennamen
+// Memoized Filter Select component - fokussiert auf wichtigste Filter
 const FilterSelect = memo(({ 
   filterBy, 
   onFilterChange 
@@ -133,17 +133,12 @@ const FilterSelect = memo(({
   filterBy: FilterOption;
   onFilterChange: (value: FilterOption) => void;
 }) => {
-  // Filter options basierend auf Excel-Spalten
+  // Wichtigste Filter basierend auf Spalte I
   const filterOptions = useMemo(() => [
     { value: 'all' as const, label: 'Alle Adressen' },
-    { value: 'has_contract' as const, label: 'Vertrag vorhanden oder L1-Angebot gesendet' },
-    { value: 'no_contract' as const, label: 'Kein Vertrag' },
-    { value: 'fertigstellung_erfolgt' as const, label: 'Fertigstellung Bau erfolgt' },
-    { value: 'has_notes' as const, label: 'Mit Notizen' },
-    { value: 'high_value' as const, label: 'Preis >50€' },
-    { value: 'large_projects' as const, label: 'Anzahl Homes >10' },
-    { value: 'outdoor_fee' as const, label: 'Outdoor-Pauschale vorhanden' },
-    { value: 'provision_category' as const, label: 'Mit Provisions-Kategorie' }
+    { value: 'kein_vertrag' as const, label: '🎯 Kein Vertrag (Spalte I = 0)' },
+    { value: 'mit_vertrag' as const, label: '✅ Mit Vertrag (Spalte I = 1)' },
+    { value: 'has_notes' as const, label: '📝 Mit Notizen' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -169,7 +164,7 @@ const FilterSelect = memo(({
   );
 });
 
-// Memoized Sort Select component mit exakten Excel-Spaltennamen
+// Memoized Sort Select component - PLZ als wichtigste Sortierung
 const SortSelect = memo(({ 
   sortBy, 
   onSortChange 
@@ -177,15 +172,13 @@ const SortSelect = memo(({
   sortBy: SortOption;
   onSortChange: (value: SortOption) => void;
 }) => {
-  // Sort options mit exakten Excel-Spaltennamen
+  // PLZ als wichtigste Sortierung
   const sortOptions = useMemo(() => [
+    { value: 'PLZ' as const, label: '📍 Nach PLZ (wichtigste)' },
     { value: 'Region' as const, label: 'Nach Region' },
     { value: 'Adresse' as const, label: 'Nach Adresse' },
     { value: 'Anzahl der Homes' as const, label: 'Nach Anzahl der Homes' },
-    { value: 'Preis Standardprodukt (€)' as const, label: 'Nach Preis Standardprodukt (€)' },
-    { value: 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet' as const, label: 'Nach Vertragsstatus' },
-    { value: 'ANO' as const, label: 'Nach ANO' },
-    { value: 'Status' as const, label: 'Nach Status' }
+    { value: 'Preis Standardprodukt (€)' as const, label: 'Nach Preis' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
