@@ -7,24 +7,28 @@ import { isNativeCapacitor, saveDataToCSVNativeOrWeb } from '@/lib/native';
 import Controls from './Controls';
 import RegionList from './RegionList';
 import EmptyState from './EmptyState';
-import { BarChart3, Check, X } from 'lucide-react';
+import { BarChart3, Check, X, Target, MapPin } from 'lucide-react';
 
 type ImportStats =
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; message?: string; error?: undefined }
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; error: string; message?: undefined };
 
-// Memoized components for better performance - German labels
-const KPI = memo(({ label, value }: { label: string; value: number }) => (
+// Memoized components for better performance
+const KPI = memo(({ label, value, icon }: { label: string; value: number; icon?: React.ReactNode }) => (
   <div className="text-center p-6 bg-white/70 rounded-2xl border border-gray-200/50 shadow-sm">
-    <div className="text-4xl font-black">{value.toLocaleString('de-DE')}</div>
+    <div className="flex items-center justify-center gap-2 mb-2">
+      {icon}
+      <div className="text-4xl font-black">{value.toLocaleString('de-DE')}</div>
+    </div>
     <div className="text-sm font-bold text-gray-700">{label}</div>
   </div>
 ));
 
-const Stat = memo(({ label, value, highlight }: { label: string; value: number; highlight?: 'green'|'amber' }) => {
+const Stat = memo(({ label, value, highlight }: { label: string; value: number; highlight?: 'green'|'amber'|'red' }) => {
   const color = useMemo(() => 
     highlight === 'green' ? 'text-emerald-600' :
-    highlight === 'amber' ? 'text-amber-600' : 'text-gray-900',
+    highlight === 'amber' ? 'text-amber-600' : 
+    highlight === 'red' ? 'text-red-600' : 'text-gray-900',
     [highlight]
   );
   
@@ -36,54 +40,53 @@ const Stat = memo(({ label, value, highlight }: { label: string; value: number; 
   );
 });
 
-// Filter-Funktion mit Excel-Spaltennamen
+// PLZ aus Adresse extrahieren
+function extractPLZ(address: string): string {
+  const plzMatch = address.match(/,\s*(\d{4}),/);
+  return plzMatch ? plzMatch[1] : 'Unbekannt';
+}
+
+// Optimierte Filter-Funktion fokussiert auf Spalte I
 const createAddressFilter = (searchTerm: string, filterBy: string) => {
   const searchLower = searchTerm.toLowerCase();
   
   return (address: Address) => {
-    // Erweiterte Suche über alle relevanten Excel-Felder
+    // Erweiterte Suche inkl. PLZ
     if (searchTerm) {
+      const plz = extractPLZ(address.address);
       const matchesSearch = 
         address.address.toLowerCase().includes(searchLower) ||
         address.region.toLowerCase().includes(searchLower) ||
         address.notes.toLowerCase().includes(searchLower) ||
-        (address.ano || '').toLowerCase().includes(searchLower) ||
-        (address.status || '').toLowerCase().includes(searchLower) ||
         (address.buildingCompany || '').toLowerCase().includes(searchLower) ||
-        (address.kgNumber || '').toLowerCase().includes(searchLower) ||
-        (address.provisionCategory || '').toLowerCase().includes(searchLower) ||
-        (address.addressCode || '').toLowerCase().includes(searchLower);
+        plz.includes(searchTerm);
       
       if (!matchesSearch) return false;
     }
 
-    // Filter basierend auf Excel-Spalten
+    // Fokus auf Spalte I (wichtigster Filter)
     switch (filterBy) {
-      case 'has_contract': 
-        return address.contractStatus > 0;
-      case 'no_contract': 
+      case 'kein_vertrag': 
         return address.contractStatus === 0;
-      case 'fertigstellung_erfolgt': 
-        return address.completionDone === true;
+      case 'mit_vertrag': 
+        return address.contractStatus > 0;
       case 'has_notes': 
         return !!address.notes;
-      case 'high_value': 
-        return address.price > 50;
-      case 'large_projects': 
-        return address.homes > 10;
-      case 'outdoor_fee': 
-        return !!(address.outdoorFee && address.outdoorFee.trim());
-      case 'provision_category': 
-        return !!(address.provisionCategory && address.provisionCategory.trim());
       default: 
         return true;
     }
   };
 };
 
-// Sort-Funktion mit exakten Excel-Spaltennamen
+// Sortierung mit PLZ als wichtigste Option
 const createAddressSorter = (sortBy: string) => {
   switch (sortBy) {
+    case 'PLZ': 
+      return (a: Address, b: Address) => {
+        const plzA = extractPLZ(a.address);
+        const plzB = extractPLZ(b.address);
+        return plzA.localeCompare(plzB) || a.address.localeCompare(b.address);
+      };
     case 'Region': 
       return (a: Address, b: Address) => a.region.localeCompare(b.region) || a.address.localeCompare(b.address);
     case 'Adresse': 
@@ -92,12 +95,6 @@ const createAddressSorter = (sortBy: string) => {
       return (a: Address, b: Address) => b.homes - a.homes;
     case 'Preis Standardprodukt (€)': 
       return (a: Address, b: Address) => b.price - a.price;
-    case 'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet': 
-      return (a: Address, b: Address) => b.contractStatus - a.contractStatus;
-    case 'ANO': 
-      return (a: Address, b: Address) => (a.ano || '').localeCompare(b.ano || '');
-    case 'Status': 
-      return (a: Address, b: Address) => (a.status || '').localeCompare(b.status || '');
     default: 
       return () => 0;
   }
@@ -109,8 +106,8 @@ export default function AddressManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all'|'has_contract'|'no_contract'|'fertigstellung_erfolgt'|'has_notes'|'high_value'|'large_projects'|'outdoor_fee'|'provision_category'>('all');
-  const [sortBy, setSortBy] = useState<'Region'|'Adresse'|'Anzahl der Homes'|'Preis Standardprodukt (€)'|'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet'|'ANO'|'Status'>('Region');
+  const [filterBy, setFilterBy] = useState<'all'|'kein_vertrag'|'mit_vertrag'|'has_notes'>('all');
+  const [sortBy, setSortBy] = useState<'PLZ'|'Region'|'Adresse'|'Anzahl der Homes'|'Preis Standardprodukt (€)'>('PLZ');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const [isNative, setIsNative] = useState(false);
 
@@ -122,50 +119,64 @@ export default function AddressManager() {
   const filterFn = useMemo(() => createAddressFilter(searchTerm, filterBy), [searchTerm, filterBy]);
   const sortFn = useMemo(() => createAddressSorter(sortBy), [sortBy]);
 
-  // Optimized groupedAddresses with better memoization
+  // PLZ-basierte Gruppierung als wichtigste Option
   const groupedAddresses = useMemo(() => {
-    // Use filter and sort functions
     const filtered = addresses.filter(filterFn);
     filtered.sort(sortFn);
 
-    // Group efficiently
     const grouped: Record<string, Address[]> = {};
-    for (const address of filtered) {
-      if (!grouped[address.region]) {
-        grouped[address.region] = [];
+    
+    // Gruppierung je nach Sortierung
+    if (sortBy === 'PLZ') {
+      // Nach PLZ gruppieren
+      for (const address of filtered) {
+        const plz = extractPLZ(address.address);
+        const key = `PLZ ${plz}`;
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(address);
       }
-      grouped[address.region].push(address);
+    } else {
+      // Nach Region gruppieren (wie bisher)
+      for (const address of filtered) {
+        if (!grouped[address.region]) {
+          grouped[address.region] = [];
+        }
+        grouped[address.region].push(address);
+      }
     }
+    
     return grouped;
-  }, [addresses, filterFn, sortFn]);
+  }, [addresses, filterFn, sortFn, sortBy]);
 
-  // Erweiterte Statistiken mit Excel-Feldern
+  // Fokussierte Statistiken für Spalte I
   const statistics = useMemo(() => {
     const totalHomes = addresses.reduce((sum, address) => sum + address.homes, 0);
-    const withContract = addresses.filter(address => address.contractStatus > 0).length;
+    const keinVertrag = addresses.filter(address => address.contractStatus === 0).length;
+    const mitVertrag = addresses.filter(address => address.contractStatus > 0).length;
     const withNotes = addresses.filter(address => !!address.notes).length;
-    const completionDone = addresses.filter(address => address.completionDone === true).length;
-    const withOutdoorFee = addresses.filter(address => !!(address.outdoorFee && address.outdoorFee.trim())).length;
-    const withProvisionCategory = addresses.filter(address => !!(address.provisionCategory && address.provisionCategory.trim())).length;
-    const highValue = addresses.filter(address => address.price > 50).length;
-    const largeProjects = addresses.filter(address => address.homes > 10).length;
     const totalValue = addresses.reduce((sum, address) => sum + address.price, 0);
     
-    const completePct = addresses.length === 0 ? 0 : Math.round(
-      (addresses.filter(address => address.notes && address.contractStatus > 0).length / addresses.length) * 100
-    );
+    // PLZ-Statistiken
+    const plzMap = new Map();
+    addresses.forEach(address => {
+      const plz = extractPLZ(address.address);
+      plzMap.set(plz, (plzMap.get(plz) || 0) + 1);
+    });
+    const uniquePLZ = plzMap.size;
+    
+    // Potenzial berechnen (Adressen ohne Vertrag)
+    const potenzialPct = addresses.length === 0 ? 0 : Math.round((keinVertrag / addresses.length) * 100);
     
     return {
       totalHomes,
-      withContract,
+      keinVertrag,
+      mitVertrag,
       withNotes,
-      completionDone,
-      withOutdoorFee,
-      withProvisionCategory,
-      highValue,
-      largeProjects,
       totalValue,
-      completePct,
+      potenzialPct,
+      uniquePLZ,
       totalAddresses: addresses.length,
       totalRegions: Object.keys(groupedAddresses).length
     };
@@ -258,21 +269,14 @@ export default function AddressManager() {
         setSortBy={setSortBy}
       />
 
-      {/* Import Status - Deutsche Texte */}
+      {/* Import Status */}
       {isImporting && (
         <div className="my-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
-          <div className="mb-3 font-bold">Import läuft...</div>
-          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
-              style={{ width: `${importProgress}%` }} 
-            />
-          </div>
           <div className="mt-2 text-sm text-gray-600">{importProgress}%</div>
         </div>
       )}
 
-      {/* Import Results - Deutsche Texte */}
+      {/* Import Results */}
       {importStats && (
         <div className={`my-8 rounded-3xl p-6 border ${importStats.error ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'}`}>
           <div className={`flex items-center gap-3 font-bold text-lg ${importStats.error ? 'text-red-800' : 'text-emerald-800'}`}>
@@ -306,53 +310,67 @@ export default function AddressManager() {
             onUpdate={updateAddress}
           />
 
-          {/* Stats Dashboard - Mit Excel-Feldern */}
+          {/* Stats Dashboard - Fokus auf Spalte I und PLZ */}
           <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
-            <h3 className="text-2xl font-black flex items-center gap-2">
-              <BarChart3 /> Portfolio Übersicht
+            <h3 className="text-2xl font-black flex items-center gap-2 mb-6">
+              <BarChart3 /> Verkaufs-Übersicht
             </h3>
             
-            {/* Haupt-KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 my-6">
-              <KPI label="Adressen gesamt" value={statistics.totalAddresses} />
-              <KPI label="Regionen" value={statistics.totalRegions} />
-              <KPI label="Anzahl der Homes" value={statistics.totalHomes} />
-              <KPI label="Vertrag vorhanden" value={statistics.withContract} />
+            {/* Wichtigste KPIs - Spalte I fokussiert */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+              <KPI label="🎯 Kein Vertrag" value={statistics.keinVertrag} icon={<Target className="w-6 h-6 text-red-500" />} />
+              <KPI label="✅ Mit Vertrag" value={statistics.mitVertrag} icon={<Check className="w-6 h-6 text-green-500" />} />
+              <KPI label="📍 PLZ Bereiche" value={statistics.uniquePLZ} icon={<MapPin className="w-6 h-6 text-blue-500" />} />
+              <KPI label="🏠 Homes gesamt" value={statistics.totalHomes} />
             </div>
 
-            {/* Excel-basierte Statistiken */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <Stat label="Fertigstellung erfolgt" value={statistics.completionDone} highlight="green" />
-              <Stat label="Outdoor-Pauschale" value={statistics.withOutdoorFee} />
-              <Stat label="Provisions-Kategorie" value={statistics.withProvisionCategory} />
+            {/* Potenzial-Anzeige */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl border border-orange-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Target className="w-5 h-5 text-red-500" />
+                  Verkaufspotenzial
+                </h4>
+                <span className="text-3xl font-black text-red-600">{statistics.potenzialPct}%</span>
+              </div>
+              <div className="w-full h-4 bg-white rounded-full overflow-hidden mb-2">
+                <div 
+                  className="h-4 bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500 ease-out" 
+                  style={{ width: `${statistics.potenzialPct}%` }} 
+                />
+              </div>
+              <p className="text-sm text-gray-700">
+                <strong>{statistics.keinVertrag.toLocaleString('de-DE')} Adressen</strong> ohne Vertrag = Verkaufschancen!
+              </p>
+            </div>
+
+            {/* Zusätzliche Statistiken */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Stat label="Adressen gesamt" value={statistics.totalAddresses} />
               <Stat label="Mit Notizen" value={statistics.withNotes} highlight="green" />
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-              <Stat label="Preis >50€" value={statistics.highValue} highlight="amber" />
-              <Stat label="Homes >10" value={statistics.largeProjects} />
+              <Stat label="Gruppierungen" value={statistics.totalRegions} />
               <Stat label="Gesamtwert (€)" value={Math.round(statistics.totalValue)} />
             </div>
 
-            {/* Fortschrittsbalken */}
-            <div>
-              <div className="flex items-center justify-between mb-2 font-bold">
-                <span>Bearbeitungsfortschritt</span>
-                <span>{statistics.completePct}%</span>
+            {/* Hinweis zur PLZ-Sortierung */}
+            {sortBy === 'PLZ' && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  <strong>PLZ-Ansicht aktiv:</strong> Adressen sind nach Postleitzahlen gruppiert für optimale regionale Bearbeitung.
+                </p>
               </div>
-              <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-6 bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 transition-all duration-500 ease-out" 
-                  style={{ width: `${statistics.completePct}%` }} 
-                />
-              </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Adressen mit Notizen und Vertrag gelten als vollständig bearbeitet.
-              </p>
-            </div>
+            )}
           </div>
         </>
       )}
     </div>
   );
-}
+}mb-3 font-bold">Import läuft...</div>
+          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
+              style={{ width: `${importProgress}%` }} 
+            />
+          </div>
+          <div className="
