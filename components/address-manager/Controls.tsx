@@ -1,11 +1,11 @@
 'use client';
 
-import { Upload, Share2, Search, Filter, TrendingUp, Smartphone, Layers } from 'lucide-react';
+import { Upload, Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
 import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
 
 // Define types for better TypeScript support
-type FilterOption = 'all' | 'has_contract' | 'no_contract' | 'in_operation' | 'has_notes';
-type SortOption = 'region' | 'address' | 'homes' | 'price';
+type FilterOption = 'all' | 'has_contract' | 'no_contract' | 'in_operation' | 'has_notes' | 'high_value' | 'large_projects';
+type SortOption = 'region' | 'address' | 'homes' | 'price' | 'contract_status';
 
 interface ControlsProps {
   isImporting: boolean;
@@ -21,11 +21,11 @@ interface ControlsProps {
   setSortBy: (v: SortOption) => void;
 }
 
-// Memoized Header component
+// Memoized Header component - angepasst für Immobilien/Verkauf
 const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
   const iconElement = useMemo(() => 
-    isNative ? <Smartphone /> : <Layers />, 
-    [isNative]
+    <Building2 className="w-6 h-6" />, 
+    []
   );
 
   return (
@@ -35,15 +35,15 @@ const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
       </div>
       <div>
         <h1 className="text-3xl font-black">
-          Address Manager <span className="text-blue-700">Professional</span>
+          Adress <span className="text-blue-700">Manager</span>
         </h1>
-        <p className="text-gray-600">Advanced Excel processing with native iOS integration</p>
+        <p className="text-gray-600">Verkaufsadressen verwalten und Fortschritt verfolgen</p>
       </div>
     </div>
   );
 });
 
-// Memoized Action Buttons component
+// Memoized Action Buttons component - deutsche Labels
 const ActionButtons = memo(({ 
   isImporting, 
   allowExport, 
@@ -58,13 +58,13 @@ const ActionButtons = memo(({
   onExport: () => void;
 }) => {
   const importButtonText = useMemo(() => 
-    isImporting ? 'Processing...' : 'Import Excel',
+    isImporting ? 'Wird geladen...' : 'Excel/CSV hochladen',
     [isImporting]
   );
 
   const exportButtonText = useMemo(() => 
-    isNative ? 'Share Data' : 'Export CSV',
-    [isNative]
+    'CSV exportieren',
+    []
   );
 
   return (
@@ -77,19 +77,19 @@ const ActionButtons = memo(({
         aria-label={importButtonText}
       >
         <span className="inline-flex items-center gap-2">
-          <Upload /> {importButtonText}
+          <FileSpreadsheet className="w-5 h-5" /> {importButtonText}
         </span>
       </button>
 
       {allowExport && (
         <button
           onClick={onExport}
-          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg"
+          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg"
           type="button"
           aria-label={exportButtonText}
         >
           <span className="inline-flex items-center gap-2">
-            <Share2 /> {exportButtonText}
+            <Download className="w-5 h-5" /> {exportButtonText}
           </span>
         </button>
       )}
@@ -97,7 +97,7 @@ const ActionButtons = memo(({
   );
 });
 
-// Memoized Search Input component
+// Memoized Search Input component - deutsche Platzhalter
 const SearchInput = memo(({ 
   searchTerm, 
   onSearchChange 
@@ -114,7 +114,7 @@ const SearchInput = memo(({
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
       <input
         type="text"
-        placeholder="Search addresses, regions, providers..."
+        placeholder="Suche nach Adresse, Region, ANO, Status, Notizen..."
         value={searchTerm}
         onChange={handleInputChange}
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300"
@@ -125,7 +125,7 @@ const SearchInput = memo(({
   );
 });
 
-// Memoized Filter Select component
+// Memoized Filter Select component - angepasst für Immobiliendaten
 const FilterSelect = memo(({ 
   filterBy, 
   onFilterChange 
@@ -135,11 +135,13 @@ const FilterSelect = memo(({
 }) => {
   // Memoize filter options to prevent recreation
   const filterOptions = useMemo(() => [
-    { value: 'all' as const, label: 'All Addresses' },
-    { value: 'has_contract' as const, label: 'With Contract' },
-    { value: 'no_contract' as const, label: 'No Contract' },
-    { value: 'in_operation' as const, label: 'In Operation' },
-    { value: 'has_notes' as const, label: 'With Notes' }
+    { value: 'all' as const, label: 'Alle Adressen' },
+    { value: 'has_contract' as const, label: 'Mit Vertrag' },
+    { value: 'no_contract' as const, label: 'Ohne Vertrag' },
+    { value: 'in_operation' as const, label: 'In Betrieb' },
+    { value: 'has_notes' as const, label: 'Mit Notizen' },
+    { value: 'high_value' as const, label: 'Hoher Wert (>50€)' },
+    { value: 'large_projects' as const, label: 'Große Projekte (>10 Homes)' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -153,7 +155,7 @@ const FilterSelect = memo(({
         value={filterBy}
         onChange={handleSelectChange}
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Filter addresses"
+        aria-label="Adressen filtern"
       >
         {filterOptions.map(option => (
           <option key={option.value} value={option.value}>
@@ -165,7 +167,7 @@ const FilterSelect = memo(({
   );
 });
 
-// Memoized Sort Select component
+// Memoized Sort Select component - angepasst für Verkaufsdaten
 const SortSelect = memo(({ 
   sortBy, 
   onSortChange 
@@ -175,10 +177,11 @@ const SortSelect = memo(({
 }) => {
   // Memoize sort options to prevent recreation
   const sortOptions = useMemo(() => [
-    { value: 'region' as const, label: 'Sort by Region' },
-    { value: 'address' as const, label: 'Sort by Address' },
-    { value: 'homes' as const, label: 'Sort by Homes Count' },
-    { value: 'price' as const, label: 'Sort by Price' }
+    { value: 'region' as const, label: 'Nach Region' },
+    { value: 'address' as const, label: 'Nach Adresse' },
+    { value: 'homes' as const, label: 'Nach Anzahl Homes' },
+    { value: 'price' as const, label: 'Nach Preis' },
+    { value: 'contract_status' as const, label: 'Nach Vertragsstatus' }
   ], []);
 
   const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -192,7 +195,7 @@ const SortSelect = memo(({
         value={sortBy}
         onChange={handleSelectChange}
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Sort addresses"
+        aria-label="Adressen sortieren"
       >
         {sortOptions.map(option => (
           <option key={option.value} value={option.value}>
@@ -204,7 +207,7 @@ const SortSelect = memo(({
   );
 });
 
-// Memoized File Input component
+// Memoized File Input component - unterstützt Excel und CSV
 const FileInput = memo(({ 
   onFilesSelected,
   inputRef 
@@ -225,11 +228,11 @@ const FileInput = memo(({
     <input
       ref={inputRef}
       type="file"
-      accept=".xlsx,.xls"
+      accept=".xlsx,.xls,.csv"
       multiple
       className="hidden"
       onChange={handleFileChange}
-      aria-label="Select Excel files to import"
+      aria-label="Excel- oder CSV-Dateien auswählen"
     />
   );
 });
