@@ -1,6 +1,6 @@
 ## Address Manager Pro
 
-**Address Manager Pro** is a lightweight **Next.js + React + TypeScript** app, fully vibe-coded for a friend’s needs.  
+**Address Manager Pro** is a lightweight **Next.js + TypeScript** app, fully vibe-coded for a friend’s needs.  
 It helps manage an address portfolio pulled from Excel, with a clean UI built in **Tailwind CSS**.  
 Runs smoothly in a regular browser or wrapped with **Capacitor** for mobile.
 
