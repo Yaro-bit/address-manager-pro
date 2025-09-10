@@ -9,6 +9,30 @@ import RegionList from './RegionList';
 import EmptyState from './EmptyState';
 import { BarChart3, Check, X, Target, MapPin } from 'lucide-react';
 
+/** ----------------------------------------------------------------
+ *  Helpers (safe string ops, comparisons, PLZ extraction & caching)
+ *  ---------------------------------------------------------------- */
+const safe = (s?: string) => (s ?? '').toLowerCase();
+const cmpStr = (a?: string, b?: string) => (a ?? '').localeCompare(b ?? '', 'de');
+const cmpNumDesc = (a?: number, b?: number) => (b ?? 0) - (a ?? 0);
+
+// More permissive PLZ detector: first standalone 4-digit token (AT)
+function detectPLZ(text: string): string {
+  if (!text) return 'Unbekannt';
+  const m = text.match(/(^|\D)(\d{4})(\D|$)/);
+  return m ? m[2] : 'Unbekannt';
+}
+
+// Cache PLZ per address id to avoid repeated regex work
+function buildPlzIndex(addresses: Address[]): Map<number | string, string> {
+  const m = new Map<number | string, string>();
+  for (const a of addresses) {
+    const key = (a as any).id as number | string;
+    if (!m.has(key)) m.set(key, detectPLZ(a.address));
+  }
+  return m;
+}
+
 type ImportStats =
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; message?: string; error?: undefined }
   | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; error: string; message?: undefined };
@@ -24,14 +48,15 @@ const KPI = memo(({ label, value, icon }: { label: string; value: number; icon?:
   </div>
 ));
 
-const Stat = memo(({ label, value, highlight }: { label: string; value: number; highlight?: 'green'|'amber'|'red' }) => {
-  const color = useMemo(() => 
-    highlight === 'green' ? 'text-emerald-600' :
-    highlight === 'amber' ? 'text-amber-600' : 
-    highlight === 'red' ? 'text-red-600' : 'text-gray-900',
-    [highlight]
-  );
-  
+const Stat = memo(({ label, value, highlight }: { label: string; value: number; highlight?: 'green' | 'amber' | 'red' }) => {
+  const color =
+    highlight === 'green'
+      ? 'text-emerald-600'
+      : highlight === 'amber'
+      ? 'text-amber-600'
+      : highlight === 'red'
+      ? 'text-red-600'
+      : 'text-gray-900';
   return (
     <div className="text-center p-4 bg-white/60 rounded-2xl">
       <div className={`text-3xl font-black ${color} mb-1`}>{value.toLocaleString('de-DE')}</div>
@@ -40,62 +65,56 @@ const Stat = memo(({ label, value, highlight }: { label: string; value: number; 
   );
 });
 
-// PLZ aus Adresse extrahieren
-function extractPLZ(address: string): string {
-  const plzMatch = address.match(/,\s*(\d{4}),/);
-  return plzMatch ? plzMatch[1] : 'Unbekannt';
-}
+/** ----------------------------------------------------------------
+ *  Filtering & sorting (keeps existing API; safer & PLZ-aware)
+ *  ---------------------------------------------------------------- */
+const createAddressFilter = (searchTerm: string, filterBy: string, plzIndex: Map<number | string, string>) => {
+  const q = (searchTerm || '').trim().toLowerCase();
+  const qPlz = q.replace(/\D/g, ''); // numeric-only for PLZ intent
 
-// Optimierte Filter-Funktion fokussiert auf Spalte I
-const createAddressFilter = (searchTerm: string, filterBy: string) => {
-  const searchLower = searchTerm.toLowerCase();
-  
   return (address: Address) => {
-    // Erweiterte Suche inkl. PLZ
-    if (searchTerm) {
-      const plz = extractPLZ(address.address);
-      const matchesSearch = 
-        address.address.toLowerCase().includes(searchLower) ||
-        address.region.toLowerCase().includes(searchLower) ||
-        address.notes.toLowerCase().includes(searchLower) ||
-        (address.buildingCompany || '').toLowerCase().includes(searchLower) ||
-        plz.includes(searchTerm);
-      
-      if (!matchesSearch) return false;
+    if (q) {
+      const id = (address as any).id as number | string;
+      const plz = plzIndex.get(id) || 'Unbekannt';
+      const matches =
+        safe(address.address).includes(q) ||
+        safe(address.region).includes(q) ||
+        safe(address.notes).includes(q) ||
+        safe(address.buildingCompany).includes(q) ||
+        (!!qPlz && plz.includes(qPlz));
+      if (!matches) return false;
     }
 
-    // Fokus auf Spalte I (wichtigster Filter)
     switch (filterBy) {
-      case 'kein_vertrag': 
-        return address.contractStatus === 0;
-      case 'mit_vertrag': 
-        return address.contractStatus > 0;
-      case 'has_notes': 
-        return !!address.notes;
-      default: 
+      case 'kein_vertrag':
+        return (address.contractStatus ?? 0) === 0;
+      case 'mit_vertrag':
+        return (address.contractStatus ?? 0) > 0;
+      case 'has_notes':
+        return !!address.notes && address.notes.trim() !== '';
+      default:
         return true;
     }
   };
 };
 
-// Sortierung mit PLZ als wichtigste Option
-const createAddressSorter = (sortBy: string) => {
+const createAddressSorter = (sortBy: string, plzIndex: Map<number | string, string>) => {
   switch (sortBy) {
-    case 'PLZ': 
+    case 'PLZ':
       return (a: Address, b: Address) => {
-        const plzA = extractPLZ(a.address);
-        const plzB = extractPLZ(b.address);
-        return plzA.localeCompare(plzB) || a.address.localeCompare(b.address);
+        const pa = plzIndex.get((a as any).id as number | string) || 'Unbekannt';
+        const pb = plzIndex.get((b as any).id as number | string) || 'Unbekannt';
+        return cmpStr(pa, pb) || cmpStr(a.address, b.address);
       };
-    case 'Region': 
-      return (a: Address, b: Address) => a.region.localeCompare(b.region) || a.address.localeCompare(b.address);
-    case 'Adresse': 
-      return (a: Address, b: Address) => a.address.localeCompare(b.address);
-    case 'Anzahl der Homes': 
-      return (a: Address, b: Address) => b.homes - a.homes;
-    case 'Preis Standardprodukt (€)': 
-      return (a: Address, b: Address) => b.price - a.price;
-    default: 
+    case 'Region':
+      return (a: Address, b: Address) => cmpStr(a.region, b.region) || cmpStr(a.address, b.address);
+    case 'Adresse':
+      return (a: Address, b: Address) => cmpStr(a.address, b.address);
+    case 'Anzahl der Homes':
+      return (a: Address, b: Address) => cmpNumDesc(a.homes, b.homes);
+    case 'Preis Standardprodukt (€)':
+      return (a: Address, b: Address) => cmpNumDesc(a.price, b.price);
+    default:
       return () => 0;
   }
 };
@@ -106,8 +125,8 @@ export default function AddressManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all'|'kein_vertrag'|'mit_vertrag'|'has_notes'>('all');
-  const [sortBy, setSortBy] = useState<'PLZ'|'Region'|'Adresse'|'Anzahl der Homes'|'Preis Standardprodukt (€)'>('PLZ');
+  const [filterBy, setFilterBy] = useState<'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes'>('all');
+  const [sortBy, setSortBy] = useState<'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)'>('PLZ');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const [isNative, setIsNative] = useState(false);
 
@@ -115,60 +134,54 @@ export default function AddressManager() {
     setIsNative(isNativeCapacitor());
   }, []);
 
-  // Memoize filter and sort functions
-  const filterFn = useMemo(() => createAddressFilter(searchTerm, filterBy), [searchTerm, filterBy]);
-  const sortFn = useMemo(() => createAddressSorter(sortBy), [sortBy]);
+  // Single PLZ index for the current list
+  const plzIndex = useMemo(() => buildPlzIndex(addresses), [addresses]);
 
-  // PLZ-basierte Gruppierung als wichtigste Option
+  // Memoized filter and sort using the PLZ index
+  const filterFn = useMemo(() => createAddressFilter(searchTerm, filterBy, plzIndex), [searchTerm, filterBy, plzIndex]);
+  const sortFn = useMemo(() => createAddressSorter(sortBy, plzIndex), [sortBy, plzIndex]);
+
+  // Grouping (PLZ priority; falls back to Region) — stable key order
   const groupedAddresses = useMemo(() => {
     const filtered = addresses.filter(filterFn);
     filtered.sort(sortFn);
 
     const grouped: Record<string, Address[]> = {};
-    
-    // Gruppierung je nach Sortierung
+
     if (sortBy === 'PLZ') {
-      // Nach PLZ gruppieren
-      for (const address of filtered) {
-        const plz = extractPLZ(address.address);
+      for (const a of filtered) {
+        const id = (a as any).id as number | string;
+        const plz = plzIndex.get(id) || 'Unbekannt';
         const key = `PLZ ${plz}`;
-        if (!grouped[key]) {
-          grouped[key] = [];
-        }
-        grouped[key].push(address);
+        (grouped[key] ||= []).push(a);
       }
     } else {
-      // Nach Region gruppieren (wie bisher)
-      for (const address of filtered) {
-        if (!grouped[address.region]) {
-          grouped[address.region] = [];
-        }
-        grouped[address.region].push(address);
+      for (const a of filtered) {
+        const key = a.region || 'Unbekannt';
+        (grouped[key] ||= []).push(a);
       }
     }
-    
-    return grouped;
-  }, [addresses, filterFn, sortFn, sortBy]);
 
-  // Fokussierte Statistiken für Spalte I
+    // Return an object with keys in sorted order to keep UI deterministic
+    const sortedKeys = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'de'));
+    const out: Record<string, Address[]> = {};
+    for (const k of sortedKeys) out[k] = grouped[k];
+    return out;
+  }, [addresses, filterFn, sortFn, sortBy, plzIndex]);
+
+  // Statistics (defensive defaults)
   const statistics = useMemo(() => {
-    const totalHomes = addresses.reduce((sum, address) => sum + address.homes, 0);
-    const keinVertrag = addresses.filter(address => address.contractStatus === 0).length;
-    const mitVertrag = addresses.filter(address => address.contractStatus > 0).length;
-    const withNotes = addresses.filter(address => !!address.notes).length;
-    const totalValue = addresses.reduce((sum, address) => sum + address.price, 0);
-    
-    // PLZ-Statistiken
-    const plzMap = new Map();
-    addresses.forEach(address => {
-      const plz = extractPLZ(address.address);
-      plzMap.set(plz, (plzMap.get(plz) || 0) + 1);
-    });
-    const uniquePLZ = plzMap.size;
-    
-    // Potenzial berechnen (Adressen ohne Vertrag)
-    const potenzialPct = addresses.length === 0 ? 0 : Math.round((keinVertrag / addresses.length) * 100);
-    
+    const totalHomes = addresses.reduce((sum, a) => sum + (a.homes ?? 0), 0);
+    const keinVertrag = addresses.filter(a => (a.contractStatus ?? 0) === 0).length;
+    const mitVertrag = addresses.filter(a => (a.contractStatus ?? 0) > 0).length;
+    const withNotes = addresses.filter(a => !!(a.notes && a.notes.trim())).length;
+    const totalValue = addresses.reduce((sum, a) => sum + (a.price ?? 0), 0);
+
+    const plzSet = new Set<string>();
+    for (const a of addresses) plzSet.add(plzIndex.get((a as any).id as number | string) || 'Unbekannt');
+
+    const potenzialPct = addresses.length ? Math.round((keinVertrag / addresses.length) * 100) : 0;
+
     return {
       totalHomes,
       keinVertrag,
@@ -176,75 +189,66 @@ export default function AddressManager() {
       withNotes,
       totalValue,
       potenzialPct,
-      uniquePLZ,
+      uniquePLZ: plzSet.size,
       totalAddresses: addresses.length,
-      totalRegions: Object.keys(groupedAddresses).length
+      totalRegions: Object.keys(groupedAddresses).length,
     };
-  }, [addresses, groupedAddresses]);
+  }, [addresses, groupedAddresses, plzIndex]);
 
-  // Optimized toggle function with useCallback
+  // Toggle expand/collapse for groups
   const toggleRegion = useCallback((region: string) => {
     setExpandedRegions(prev => {
       const next = new Set(prev);
-      if (next.has(region)) {
-        next.delete(region);
-      } else {
-        next.add(region);
-      }
+      next.has(region) ? next.delete(region) : next.add(region);
       return next;
     });
   }, []);
 
-  // Optimized update function with useCallback
+  // Update a single address by id (keeps current id type)
   const updateAddress = useCallback((id: number, patch: Partial<Address>) => {
-    setAddresses(prev => prev.map(address => 
-      address.id === id ? { ...address, ...patch } : address
-    ));
+    setAddresses(prev => prev.map(a => ((a as any).id === id ? { ...a, ...patch } : a)));
   }, []);
 
-  // Debounced import progress update
-  const updateImportProgress = useCallback((progress: number) => {
-    setImportProgress(Math.min(progress, 100));
-  }, []);
-
-  const onExcelChosen = useCallback(async (files: File[]) => {
-    setIsImporting(true);
-    setImportProgress(0);
-    
-    try {
-      const { newAddresses, totalProcessed, duplicatesSkipped } = await importExcelFiles(files, addresses);
-
-      // Optimized progress simulation with requestAnimationFrame
-      if (newAddresses.length > 0) {
-        const step = Math.max(1, Math.round(newAddresses.length / 10));
-        for (let i = 0; i < newAddresses.length; i += step) {
-          const progress = Math.round(((i + step) / newAddresses.length) * 100);
-          updateImportProgress(progress);
-          await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 10)));
-        }
-      }
-
-      setAddresses(prev => [...prev, ...newAddresses]);
-      setImportStats({
-        totalProcessed,
-        imported: newAddresses.length,
-        duplicatesSkipped,
-        files: files.length,
-        message: 'Daten erfolgreich geladen!',
-      });
-    } catch (error: any) {
-      setImportStats({
-        totalProcessed: 0,
-        imported: 0,
-        duplicatesSkipped: 0,
-        files: files.length,
-        error: 'Import fehlgeschlagen: ' + (error?.message || String(error)),
-      });
-    } finally {
-      setIsImporting(false);
+  // Progress handling: simple interval that clears reliably
+  const onExcelChosen = useCallback(
+    async (files: File[]) => {
+      setIsImporting(true);
       setImportProgress(0);
-    }
-  }, [addresses, updateImportProgress]);
+      let timer: ReturnType<typeof setInterval> | null = null;
+
+      try {
+        timer = setInterval(() => setImportProgress(p => Math.min(p + 7, 93)), 120);
+
+        const { newAddresses, totalProcessed, duplicatesSkipped } = await importExcelFiles(files, addresses);
+
+        setAddresses(prev => [...prev, ...newAddresses]);
+        setImportStats({
+          totalProcessed,
+          imported: newAddresses.length,
+          duplicatesSkipped,
+          files: files.length,
+          message: 'Daten erfolgreich geladen!',
+        });
+
+        setImportProgress(100);
+      } catch (error: any) {
+        setImportStats({
+          totalProcessed: 0,
+          imported: 0,
+          duplicatesSkipped: 0,
+          files: files.length,
+          error: 'Import fehlgeschlagen: ' + (error?.message || String(error)),
+        });
+      } finally {
+        if (timer) clearInterval(timer);
+        setTimeout(() => {
+          setIsImporting(false);
+          setImportProgress(0);
+        }, 300);
+      }
+    },
+    [addresses]
+  );
 
   const exportCSV = useCallback(() => {
     saveDataToCSVNativeOrWeb(addresses, () => exportCSVWeb(addresses));
@@ -274,9 +278,9 @@ export default function AddressManager() {
         <div className="my-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
           <div className="mb-3 font-bold">Import läuft...</div>
           <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out" 
-              style={{ width: `${importProgress}%` }} 
+            <div
+              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out"
+              style={{ width: `${importProgress}%` }}
             />
           </div>
           <div className="mt-2 text-sm text-gray-600">{importProgress}%</div>
@@ -285,10 +289,18 @@ export default function AddressManager() {
 
       {/* Import Results */}
       {importStats && (
-        <div className={`my-8 rounded-3xl p-6 border ${importStats.error ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'}`}>
-          <div className={`flex items-center gap-3 font-bold text-lg ${importStats.error ? 'text-red-800' : 'text-emerald-800'}`}>
+        <div
+          className={`my-8 rounded-3xl p-6 border ${
+            importStats.error ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'
+          }`}
+        >
+          <div
+            className={`flex items-center gap-3 font-bold text-lg ${
+              importStats.error ? 'text-red-800' : 'text-emerald-800'
+            }`}
+          >
             {importStats.error ? <X /> : <Check />}
-            {importStats.error ? 'Import fehlgeschlagen' : (importStats.message || 'Import erfolgreich')}
+            {importStats.error ? 'Import fehlgeschlagen' : importStats.message || 'Import erfolgreich'}
           </div>
           {!importStats.error && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
@@ -310,20 +322,14 @@ export default function AddressManager() {
         <EmptyState isNative={isNative} />
       ) : (
         <>
-          <RegionList
-            grouped={groupedAddresses}
-            expanded={expandedRegions}
-            onToggle={toggleRegion}
-            onUpdate={updateAddress}
-          />
+          <RegionList grouped={groupedAddresses} expanded={expandedRegions} onToggle={toggleRegion} onUpdate={updateAddress} />
 
-          {/* Stats Dashboard - Fokus auf Spalte I und PLZ */}
+          {/* Stats Dashboard */}
           <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
             <h3 className="text-2xl font-black flex items-center gap-2 mb-6">
               <BarChart3 /> Verkaufs-Übersicht
             </h3>
-            
-            {/* Wichtigste KPIs - Spalte I fokussiert */}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
               <KPI label="🎯 Kein Vertrag" value={statistics.keinVertrag} icon={<Target className="w-6 h-6 text-red-500" />} />
               <KPI label="✅ Mit Vertrag" value={statistics.mitVertrag} icon={<Check className="w-6 h-6 text-green-500" />} />
@@ -331,7 +337,6 @@ export default function AddressManager() {
               <KPI label="🏠 Homes gesamt" value={statistics.totalHomes} />
             </div>
 
-            {/* Potenzial-Anzeige */}
             <div className="mb-8 p-6 bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl border border-orange-200">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -341,9 +346,9 @@ export default function AddressManager() {
                 <span className="text-3xl font-black text-red-600">{statistics.potenzialPct}%</span>
               </div>
               <div className="w-full h-4 bg-white rounded-full overflow-hidden mb-2">
-                <div 
-                  className="h-4 bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500 ease-out" 
-                  style={{ width: `${statistics.potenzialPct}%` }} 
+                <div
+                  className="h-4 bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500 ease-out"
+                  style={{ width: `${statistics.potenzialPct}%` }}
                 />
               </div>
               <p className="text-sm text-gray-700">
@@ -351,7 +356,6 @@ export default function AddressManager() {
               </p>
             </div>
 
-            {/* Zusätzliche Statistiken */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Stat label="Adressen gesamt" value={statistics.totalAddresses} />
               <Stat label="Mit Notizen" value={statistics.withNotes} highlight="green" />
@@ -359,7 +363,6 @@ export default function AddressManager() {
               <Stat label="Gesamtwert (€)" value={Math.round(statistics.totalValue)} />
             </div>
 
-            {/* Hinweis zur PLZ-Sortierung */}
             {sortBy === 'PLZ' && (
               <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
                 <p className="text-sm text-blue-800 flex items-center gap-2">
