@@ -1,6 +1,6 @@
 'use client';
 
-import { Upload, Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
+import { Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
 import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
 
 // Fokus auf die wichtigsten Filter
@@ -21,17 +21,17 @@ interface ControlsProps {
   setSortBy: (v: SortOption) => void;
 }
 
+/* ----------------------------- Subcomponents ----------------------------- */
+
 // Memoized Header component
 const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
-  const iconElement = useMemo(() => 
-    <Building2 className="w-6 h-6" />, 
-    []
-  );
+  // keeping prop for compatibility; not used internally to avoid breaking callers
+  void isNative;
 
   return (
     <div className="flex items-center gap-3">
       <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 rounded-2xl flex items-center justify-center text-white">
-        {iconElement}
+        <Building2 className="w-6 h-6" />
       </div>
       <div>
         <h1 className="text-3xl font-black">
@@ -44,12 +44,12 @@ const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
 });
 
 // Memoized Action Buttons component
-const ActionButtons = memo(({ 
-  isImporting, 
-  allowExport, 
-  isNative, 
-  onImportClick, 
-  onExport 
+const ActionButtons = memo(({
+  isImporting,
+  allowExport,
+  isNative: _isNative, // kept for compatibility; unused here
+  onImportClick,
+  onExport,
 }: {
   isImporting: boolean;
   allowExport: boolean;
@@ -57,14 +57,9 @@ const ActionButtons = memo(({
   onImportClick: () => void;
   onExport: () => void;
 }) => {
-  const importButtonText = useMemo(() => 
-    isImporting ? 'Wird geladen...' : 'Excel/CSV hochladen',
+  const importButtonText = useMemo(
+    () => (isImporting ? 'Wird geladen...' : 'Excel/CSV hochladen'),
     [isImporting]
-  );
-
-  const exportButtonText = useMemo(() => 
-    'CSV exportieren',
-    []
   );
 
   return (
@@ -86,10 +81,10 @@ const ActionButtons = memo(({
           onClick={onExport}
           className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg"
           type="button"
-          aria-label={exportButtonText}
+          aria-label="CSV exportieren"
         >
           <span className="inline-flex items-center gap-2">
-            <Download className="w-5 h-5" /> {exportButtonText}
+            <Download className="w-5 h-5" /> CSV exportieren
           </span>
         </button>
       )}
@@ -98,16 +93,19 @@ const ActionButtons = memo(({
 });
 
 // Memoized Search Input component
-const SearchInput = memo(({ 
-  searchTerm, 
-  onSearchChange 
+const SearchInput = memo(({
+  searchTerm,
+  onSearchChange,
 }: {
   searchTerm: string;
   onSearchChange: (value: string) => void;
 }) => {
-  const handleInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    onSearchChange(e.target.value);
-  }, [onSearchChange]);
+  const handleInputChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      onSearchChange(e.target.value);
+    },
+    [onSearchChange]
+  );
 
   return (
     <div className="relative md:col-span-2">
@@ -125,25 +123,28 @@ const SearchInput = memo(({
   );
 });
 
-// Memoized Filter Select component - fokussiert auf wichtigste Filter
-const FilterSelect = memo(({ 
-  filterBy, 
-  onFilterChange 
+// Filter options (static) without emojis for consistent UI
+const FILTER_OPTIONS: ReadonlyArray<{ value: FilterOption; label: string }> = [
+  { value: 'all', label: 'Alle Adressen' },
+  { value: 'kein_vertrag', label: 'Kein Vertrag (Spalte I = 0)' },
+  { value: 'mit_vertrag', label: 'Mit Vertrag (Spalte I > 0)' },
+  { value: 'has_notes', label: 'Mit Notizen' },
+] as const;
+
+// Memoized Filter Select component
+const FilterSelect = memo(({
+  filterBy,
+  onFilterChange,
 }: {
   filterBy: FilterOption;
   onFilterChange: (value: FilterOption) => void;
 }) => {
-  // Wichtigste Filter basierend auf Spalte I
-  const filterOptions = useMemo(() => [
-    { value: 'all' as const, label: 'Alle Adressen' },
-    { value: 'kein_vertrag' as const, label: '🎯 Kein Vertrag (Spalte I = 0)' },
-    { value: 'mit_vertrag' as const, label: '✅ Mit Vertrag (Spalte I = 1)' },
-    { value: 'has_notes' as const, label: '📝 Mit Notizen' }
-  ], []);
-
-  const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-    onFilterChange(e.target.value as FilterOption);
-  }, [onFilterChange]);
+  const handleSelectChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      onFilterChange(e.target.value as FilterOption);
+    },
+    [onFilterChange]
+  );
 
   return (
     <div className="relative">
@@ -154,7 +155,7 @@ const FilterSelect = memo(({
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
         aria-label="Adressen filtern"
       >
-        {filterOptions.map(option => (
+        {FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -164,26 +165,29 @@ const FilterSelect = memo(({
   );
 });
 
-// Memoized Sort Select component - PLZ als wichtigste Sortierung
-const SortSelect = memo(({ 
-  sortBy, 
-  onSortChange 
+// Sort options (static)
+const SORT_OPTIONS: ReadonlyArray<{ value: SortOption; label: string }> = [
+  { value: 'PLZ', label: 'Nach PLZ' },
+  { value: 'Region', label: 'Nach Region' },
+  { value: 'Adresse', label: 'Nach Adresse' },
+  { value: 'Anzahl der Homes', label: 'Nach Anzahl der Homes' },
+  { value: 'Preis Standardprodukt (€)', label: 'Nach Preis' },
+] as const;
+
+// Memoized Sort Select component
+const SortSelect = memo(({
+  sortBy,
+  onSortChange,
 }: {
   sortBy: SortOption;
   onSortChange: (value: SortOption) => void;
 }) => {
-  // PLZ als wichtigste Sortierung
-  const sortOptions = useMemo(() => [
-    { value: 'PLZ' as const, label: 'Nach PLZ' },
-    { value: 'Region' as const, label: 'Nach Region' },
-    { value: 'Adresse' as const, label: 'Nach Adresse' },
-    { value: 'Anzahl der Homes' as const, label: 'Nach Anzahl der Homes' },
-    { value: 'Preis Standardprodukt (€)' as const, label: 'Nach Preis' }
-  ], []);
-
-  const handleSelectChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-    onSortChange(e.target.value as SortOption);
-  }, [onSortChange]);
+  const handleSelectChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      onSortChange(e.target.value as SortOption);
+    },
+    [onSortChange]
+  );
 
   return (
     <div className="relative">
@@ -194,7 +198,7 @@ const SortSelect = memo(({
         className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
         aria-label="Adressen sortieren"
       >
-        {sortOptions.map(option => (
+        {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -205,21 +209,24 @@ const SortSelect = memo(({
 });
 
 // Memoized File Input component
-const FileInput = memo(({ 
+const FileInput = memo(({
   onFilesSelected,
-  inputRef 
+  inputRef,
 }: {
   onFilesSelected: (files: File[]) => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) => {
-  const handleFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      onFilesSelected(files);
-    }
-    // Reset the input value to allow selecting the same file again
-    e.currentTarget.value = '';
-  }, [onFilesSelected]);
+  const handleFileChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length > 0) {
+        onFilesSelected(files);
+      }
+      // Reset the input value to allow selecting the same file again
+      e.currentTarget.value = '';
+    },
+    [onFilesSelected]
+  );
 
   return (
     <input
@@ -234,41 +241,49 @@ const FileInput = memo(({
   );
 });
 
-// Main Controls component
+/* --------------------------------- Main ---------------------------------- */
+
 export default function Controls(props: ControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Memoize the file picker handler
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  // Memoize the search change handler
-  const handleSearchChange = useCallback((value: string) => {
-    props.setSearchTerm(value);
-  }, [props.setSearchTerm]);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      props.setSearchTerm(value);
+    },
+    [props.setSearchTerm]
+  );
 
-  // Memoize the filter change handler
-  const handleFilterChange = useCallback((value: FilterOption) => {
-    props.setFilterBy(value);
-  }, [props.setFilterBy]);
+  const handleFilterChange = useCallback(
+    (value: FilterOption) => {
+      props.setFilterBy(value);
+    },
+    [props.setFilterBy]
+  );
 
-  // Memoize the sort change handler
-  const handleSortChange = useCallback((value: SortOption) => {
-    props.setSortBy(value);
-  }, [props.setSortBy]);
+  const handleSortChange = useCallback(
+    (value: SortOption) => {
+      props.setSortBy(value);
+    },
+    [props.setSortBy]
+  );
 
-  // Memoize the file selection handler
-  const handleFilesSelected = useCallback((files: File[]) => {
-    props.onExcelChosen(files);
-  }, [props.onExcelChosen]);
+  const handleFilesSelected = useCallback(
+    (files: File[]) => {
+      props.onExcelChosen(files);
+    },
+    [props.onExcelChosen]
+  );
 
   return (
     <div className="mb-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
       {/* Header and Action Buttons */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         <AppHeader isNative={props.isNative} />
-        
+
         <ActionButtons
           isImporting={props.isImporting}
           allowExport={props.allowExport}
@@ -279,27 +294,15 @@ export default function Controls(props: ControlsProps) {
       </div>
 
       {/* Hidden File Input */}
-      <FileInput 
-        onFilesSelected={handleFilesSelected}
-        inputRef={fileInputRef}
-      />
+      <FileInput onFilesSelected={handleFilesSelected} inputRef={fileInputRef} />
 
       {/* Search and Filter Controls */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <SearchInput 
-          searchTerm={props.searchTerm}
-          onSearchChange={handleSearchChange}
-        />
-        
-        <FilterSelect 
-          filterBy={props.filterBy}
-          onFilterChange={handleFilterChange}
-        />
-        
-        <SortSelect 
-          sortBy={props.sortBy}
-          onSortChange={handleSortChange}
-        />
+        <SearchInput searchTerm={props.searchTerm} onSearchChange={handleSearchChange} />
+
+        <FilterSelect filterBy={props.filterBy} onFilterChange={handleFilterChange} />
+
+        <SortSelect sortBy={props.sortBy} onSortChange={handleSortChange} />
       </div>
     </div>
   );
