@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <div className="font-black tracking-tight text-lg">
               Address <span className="text-blue-700">Manager</span> Pro
             </div>
-            <div className="text-sm text-gray-600">v1</div>
+            <div className="text-sm text-gray-600">v0.0.2</div>
           </div>
         </header>
 
