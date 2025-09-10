@@ -17,57 +17,55 @@ declare global {
 // Cached platform detection results
 let platformCache: {
   isNative?: boolean;
-  platform?: string;
+  platform?: 'ios' | 'android' | 'web';
   timestamp?: number;
 } = {};
 
-const CACHE_DURATION = 30000; // 30 seconds cache
+const CACHE_DURATION = 30_000; // 30 seconds
+
+/* -------------------------------------------------------------------------- */
+/*                   Capacitor platform detection (cached)                    */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Optimized Capacitor native platform detection with caching
  */
 export function isNativeCapacitor(): boolean {
-  // Server-side rendering check
   if (typeof window === 'undefined') return false;
-  
+
   const now = Date.now();
-  
-  // Return cached result if still valid
-  if (platformCache.isNative !== undefined && 
-      platformCache.timestamp && 
-      (now - platformCache.timestamp) < CACHE_DURATION) {
+
+  if (
+    platformCache.isNative !== undefined &&
+    platformCache.timestamp &&
+    now - platformCache.timestamp < CACHE_DURATION
+  ) {
     return platformCache.isNative;
   }
-  
+
   const capacitor = window.Capacitor;
-  
+
   try {
     if (!capacitor) {
-      platformCache = { isNative: false, timestamp: now };
+      platformCache = { isNative: false, platform: 'web', timestamp: now };
       return false;
     }
-    
-    // Primary detection method
+
     if (typeof capacitor.isNativePlatform === 'function') {
       const isNative = Boolean(capacitor.isNativePlatform());
-      platformCache = { isNative, timestamp: now };
+      platformCache = { isNative, platform: getPlatform(), timestamp: now };
       return isNative;
     }
-    
-    // Fallback detection method
-    const platform = capacitor.getPlatform?.();
-    const isNative = platform === 'ios' || platform === 'android';
-    
-    platformCache = { 
-      isNative, 
-      platform: platform || 'web', 
-      timestamp: now 
-    };
-    
+
+    const p = capacitor.getPlatform?.();
+    const platform = p === 'ios' || p === 'android' ? (p as 'ios' | 'android') : 'web';
+    const isNative = platform !== 'web';
+
+    platformCache = { isNative, platform, timestamp: now };
     return isNative;
   } catch (error) {
     console.warn('Error detecting Capacitor platform:', error);
-    platformCache = { isNative: false, timestamp: now };
+    platformCache = { isNative: false, platform: 'web', timestamp: now };
     return false;
   }
 }
@@ -77,41 +75,44 @@ export function isNativeCapacitor(): boolean {
  */
 export function getPlatform(): 'ios' | 'android' | 'web' {
   if (typeof window === 'undefined') return 'web';
-  
+
   const now = Date.now();
-  
-  // Return cached platform if available and valid
-  if (platformCache.platform && 
-      platformCache.timestamp && 
-      (now - platformCache.timestamp) < CACHE_DURATION) {
-    return platformCache.platform as 'ios' | 'android' | 'web';
+  if (
+    platformCache.platform &&
+    platformCache.timestamp &&
+    now - platformCache.timestamp < CACHE_DURATION
+  ) {
+    return platformCache.platform;
   }
-  
+
   const capacitor = window.Capacitor;
-  if (!capacitor?.getPlatform) return 'web';
-  
+  if (!capacitor?.getPlatform) {
+    platformCache.platform = 'web';
+    platformCache.timestamp = now;
+    return 'web';
+  }
+
   try {
-    const platform = capacitor.getPlatform();
+    const p = capacitor.getPlatform();
+    const platform = p === 'ios' || p === 'android' ? (p as 'ios' | 'android') : 'web';
     platformCache.platform = platform;
     platformCache.timestamp = now;
-    
-    return (platform === 'ios' || platform === 'android') ? platform : 'web';
+    return platform;
   } catch {
+    platformCache.platform = 'web';
+    platformCache.timestamp = now;
     return 'web';
   }
 }
 
-// Cache for XLSX module
+/* -------------------------------------------------------------------------- */
+/*                               XLSX lazy load                               */
+/* -------------------------------------------------------------------------- */
+
 let xlsxModuleCache: any = null;
 
-/**
- * Optimized XLSX module loading with caching
- */
 async function getXLSXModule(): Promise<any> {
-  if (xlsxModuleCache) {
-    return xlsxModuleCache;
-  }
-  
+  if (xlsxModuleCache) return xlsxModuleCache;
   try {
     const mod: any = await import('xlsx');
     xlsxModuleCache = mod?.default ?? mod;
@@ -122,146 +123,139 @@ async function getXLSXModule(): Promise<any> {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                         CSV transformation (native)                        */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Optimized CSV data transformation
+ * Transform to CSV rows using the SAME headers as the web exporter,
+ * so exports round-trip cleanly with your import FIELD_MAPPINGS.
+ * (German column names retained for consistency.)
  */
-function transformAddressesToCSV(addresses: any[]): Record<string, any>[] {
-  // Pre-allocate array for better performance
-  const csvRows = new Array(addresses.length);
-  
-  const CHUNK_SIZE = 100;
-  
-  // Process in chunks to avoid blocking the main thread
+function transformAddressesToCSV(addresses: Array<Record<string, any>>): Record<string, any>[] {
+  const out = new Array(addresses.length);
+  const CHUNK_SIZE = 500;
+
   for (let i = 0; i < addresses.length; i += CHUNK_SIZE) {
     const chunk = addresses.slice(i, i + CHUNK_SIZE);
-    
     for (let j = 0; j < chunk.length; j++) {
-      const addr = chunk[j];
-      csvRows[i + j] = {
-        'Address Code': addr.addressCode || '',
-        'Address': addr.address || '',
-        'Region': addr.region || '',
-        'Provider': addr.ano || '',
-        'Status': addr.status || '',
-        'Homes': addr.homes || 0,
-        'Contract Status': addr.contractStatus || 0,
-        'Price': addr.price || 0,
-        'Provision Category': addr.provisionCategory || '',
-        'Building Company': addr.buildingCompany || '',
-        'KG Number': addr.kgNumber || '',
-        'Completion Planned': addr.completionPlanned || '',
-        'Completion Done': Boolean(addr.completionDone),
-        'D2D Start': addr.d2dStart || '',
-        'D2D End': addr.d2dEnd || '',
-        'Outdoor Fee': addr.outdoorFee || '',
-        'Notes': addr.notes || ''
+      const a = chunk[j];
+      out[i + j] = {
+        'adrcd-subcd': a.addressCode || '',
+        'Adresse': a.address || '',
+        'Region': a.region || '',
+        'ANO': a.ano || '',
+        'Status': a.status || '',
+        'Anzahl der Homes': a.homes ?? 0,
+        'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet': a.contractStatus ?? 0,
+        'Preis Standardprodukt (€)': a.price ?? 0,
+        'Provisions-Kategorie': a.provisionCategory || '',
+        'Baufirma': a.buildingCompany || '',
+        'KG Nummer': a.kgNumber || '',
+        'Fertigstellung Bau (aktueller Plan)': a.completionPlanned || '',
+        'Fertigstellung Bau erfolgt': a.completionDone ? 'Yes' : '',
+        'D2D-Vertrieb Start': a.d2dStart || '',
+        'D2D-Vertrieb Ende': a.d2dEnd || '',
+        'Outdoor-Pauschale vorhanden': a.outdoorFee || '',
+        'Notes': a.notes || '',
       };
     }
   }
-  
-  return csvRows;
+
+  return out;
 }
 
-/**
- * Optimized native file operations with better error handling
- */
+/* -------------------------------------------------------------------------- */
+/*                         Native file IO + share sheet                        */
+/* -------------------------------------------------------------------------- */
+
 async function saveAndShareNativeFile(
   csvContent: string,
   fileName: string,
   addressCount: number
 ): Promise<void> {
-  const capacitor = window.Capacitor!;
-  const { Filesystem, Share } = capacitor.Plugins!;
-  
+  const cap = window.Capacitor!;
+  const { Filesystem, Share } = cap.Plugins || {};
+
   if (!Filesystem || !Share) {
     throw new Error('Required Capacitor plugins not available');
   }
-  
+
+  // Prepend BOM for Excel compatibility on mobile as well
+  const contentWithBOM = '\uFEFF' + csvContent;
+
+  // Basic filename hardening
+  const safeFileName = fileName.replace(/[^\w.\-]+/g, '_');
+
   try {
-    // Write file to device storage
     await Filesystem.writeFile({
-      path: fileName,
-      data: csvContent,
-      directory: 'DOCUMENTS', // Use string literal to avoid type imports
-      encoding: 'utf8'
+      path: safeFileName,
+      data: contentWithBOM,
+      directory: 'DOCUMENTS', // avoids importing Capacitor types; string literal works at runtime
+      encoding: 'utf8',
     });
-    
-    // Get file URI for sharing
+
     const uriResult = await Filesystem.getUri({
       directory: 'DOCUMENTS',
-      path: fileName
+      path: safeFileName,
     });
-    
-    if (!uriResult?.uri) {
-      throw new Error('Failed to get file URI');
-    }
-    
-    // Share the file using native share sheet
+
+    if (!uriResult?.uri) throw new Error('Failed to get file URI');
+
     await Share.share({
       title: 'Address Manager Pro Export',
       text: `Address data export - ${addressCount.toLocaleString()} addresses`,
       url: uriResult.uri,
-      dialogTitle: 'Share Address Data'
+      dialogTitle: 'Share Address Data',
     });
-    
   } catch (error) {
     console.error('Native file operation failed:', error);
     throw error;
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                          Public API: saveData… (native/web)                */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Enhanced save function with performance optimizations and better error handling
+ * Enhanced save function with graceful web fallback.
+ * Signature unchanged to avoid breaking callers.
  */
 export async function saveDataToCSVNativeOrWeb(
   addresses: any[],
   webFallback: () => void | Promise<void>
 ): Promise<void> {
-  // Input validation
   if (!Array.isArray(addresses) || addresses.length === 0) {
     throw new Error('No addresses provided for export');
   }
-  
-  // Check if native platform is available
+
+  // Prefer native path when available; otherwise fall back immediately
   if (!isNativeCapacitor()) {
-    console.log('Using web fallback for CSV export');
     return await webFallback();
   }
-  
-  const capacitor = window.Capacitor;
-  if (!capacitor?.Plugins?.Filesystem || !capacitor?.Plugins?.Share) {
-    console.warn('Required Capacitor plugins not available, using web fallback');
+
+  const cap = window.Capacitor;
+  if (!cap?.Plugins?.Filesystem || !cap?.Plugins?.Share) {
     return await webFallback();
   }
-  
+
   try {
-    // Load XLSX module with caching
     const xlsx = await getXLSXModule();
-    
-    // Transform data efficiently
-    const csvRows = transformAddressesToCSV(addresses);
-    
-    // Generate worksheet and CSV content
-    const ws = xlsx.utils.json_to_sheet(csvRows);
-    const csvContent = xlsx.utils.sheet_to_csv(ws, {
-      FS: ',', // Field separator
-      RS: '\n' // Record separator
+
+    const rows = transformAddressesToCSV(addresses);
+    const ws = xlsx.utils.json_to_sheet(rows);
+    const csv = xlsx.utils.sheet_to_csv(ws, {
+      FS: ',',
+      RS: '\n',
     });
-    
-    // Generate filename with timestamp
+
     const timestamp = new Date().toISOString().split('T')[0];
     const fileName = `address-data-${timestamp}.csv`;
-    
-    // Save and share file natively
-    await saveAndShareNativeFile(csvContent, fileName, addresses.length);
-    
-    console.log(`Successfully exported ${addresses.length} addresses via native share`);
-    
+
+    await saveAndShareNativeFile(csv, fileName, addresses.length);
   } catch (error) {
-    console.error('Native CSV export failed:', error);
-    console.log('Falling back to web export');
-    
-    // Graceful fallback to web export
+    // If native flow fails for any reason, try the web path
     try {
       await webFallback();
     } catch (fallbackError) {
@@ -271,39 +265,35 @@ export async function saveDataToCSVNativeOrWeb(
   }
 }
 
-/**
- * Check if specific Capacitor plugins are available
- */
+/* -------------------------------------------------------------------------- */
+/*                              Plugin availability                            */
+/* -------------------------------------------------------------------------- */
+
 export function getAvailablePlugins(): {
   filesystem: boolean;
   share: boolean;
   isNative: boolean;
 } {
-  if (!isNativeCapacitor()) {
-    return { filesystem: false, share: false, isNative: false };
-  }
-  
-  const capacitor = window.Capacitor;
-  const plugins = capacitor?.Plugins;
-  
+  const isNative = isNativeCapacitor();
+  const cap = typeof window !== 'undefined' ? window.Capacitor : undefined;
+  const plugins = cap?.Plugins;
+
   return {
-    filesystem: Boolean(plugins?.Filesystem),
-    share: Boolean(plugins?.Share),
-    isNative: true
+    filesystem: Boolean(plugins?.Filesystem && isNative),
+    share: Boolean(plugins?.Share && isNative),
+    isNative,
   };
 }
 
-/**
- * Clear all caches (useful for testing or memory management)
- */
+/* -------------------------------------------------------------------------- */
+/*                                   Debug                                    */
+/* -------------------------------------------------------------------------- */
+
 export function clearNativeCaches(): void {
   platformCache = {};
   xlsxModuleCache = null;
 }
 
-/**
- * Get cached platform info for debugging
- */
 export function getPlatformInfo(): {
   isNative: boolean;
   platform: string;
@@ -311,15 +301,14 @@ export function getPlatformInfo(): {
   plugins: ReturnType<typeof getAvailablePlugins>;
 } {
   const now = Date.now();
-  const isCached = Boolean(
-    platformCache.timestamp && 
-    (now - platformCache.timestamp) < CACHE_DURATION
-  );
-  
+  const cached =
+    Boolean(platformCache.timestamp) &&
+    now - (platformCache.timestamp as number) < CACHE_DURATION;
+
   return {
     isNative: isNativeCapacitor(),
     platform: getPlatform(),
-    cached: isCached,
-    plugins: getAvailablePlugins()
+    cached,
+    plugins: getAvailablePlugins(),
   };
 }
