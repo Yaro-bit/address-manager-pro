@@ -1,309 +1,379 @@
 'use client';
 
-import { Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
-import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
+import { Address } from '@/lib/types';
+import { importExcelFiles, exportCSVWeb } from '@/lib/excel';
+import { isNativeCapacitor, saveDataToCSVNativeOrWeb } from '@/lib/native';
+import Controls from './Controls';
+import RegionList from './RegionList';
+import EmptyState from './EmptyState';
+import { BarChart3, Check, X, Target, MapPin } from 'lucide-react';
 
-// Fokus auf die wichtigsten Filter
-type FilterOption = 'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes';
-type SortOption = 'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)';
+/** ----------------------------------------------------------------
+ *  Helpers (safe string ops, comparisons, PLZ extraction & caching)
+ *  ---------------------------------------------------------------- */
+const safe = (s?: string) => (s ?? '').toLowerCase();
+const cmpStr = (a?: string, b?: string) => (a ?? '').localeCompare(b ?? '', 'de');
+const cmpNumDesc = (a?: number, b?: number) => (b ?? 0) - (a ?? 0);
 
-interface ControlsProps {
-  isImporting: boolean;
-  onExcelChosen: (files: File[]) => void;
-  allowExport: boolean;
-  onExport: () => void;
-  isNative: boolean;
-  searchTerm: string;
-  setSearchTerm: (v: string) => void;
-  filterBy: FilterOption;
-  setFilterBy: (v: FilterOption) => void;
-  sortBy: SortOption;
-  setSortBy: (v: SortOption) => void;
+// More permissive PLZ detector: first standalone 4-digit token (AT)
+function detectPLZ(text: string): string {
+  if (!text) return 'Unbekannt';
+  const m = text.match(/(^|\D)(\d{4})(\D|$)/);
+  return m ? m[2] : 'Unbekannt';
 }
 
-/* ----------------------------- Subcomponents ----------------------------- */
+// Cache PLZ per address id to avoid repeated regex work
+function buildPlzIndex(addresses: Address[]): Map<number | string, string> {
+  const m = new Map<number | string, string>();
+  for (const a of addresses) {
+    const key = (a as any).id as number | string;
+    if (!m.has(key)) m.set(key, detectPLZ(a.address));
+  }
+  return m;
+}
 
-// Memoized Header component
-const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
-  // keeping prop for compatibility; not used internally to avoid breaking callers
-  void isNative;
+type ImportStats =
+  | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; message?: string; error?: undefined }
+  | { totalProcessed: number; imported: number; duplicatesSkipped: number; files: number; error: string; message?: undefined };
 
+// Memoized components for better performance
+const KPI = memo(({ label, value, icon }: { label: string; value: number; icon?: React.ReactNode }) => (
+  <div className="text-center p-6 bg-white/70 rounded-2xl border border-gray-200/50 shadow-sm">
+    <div className="flex items-center justify-center gap-2 mb-2">
+      {icon}
+      <div className="text-4xl font-black">{value.toLocaleString('de-DE')}</div>
+    </div>
+    <div className="text-sm font-bold text-gray-700">{label}</div>
+  </div>
+));
+
+const Stat = memo(({ label, value, highlight }: { label: string; value: number; highlight?: 'green' | 'amber' | 'red' }) => {
+  const color =
+    highlight === 'green'
+      ? 'text-emerald-600'
+      : highlight === 'amber'
+      ? 'text-amber-600'
+      : highlight === 'red'
+      ? 'text-red-600'
+      : 'text-gray-900';
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 rounded-2xl flex items-center justify-center text-white">
-        <Building2 className="w-6 h-6" />
-      </div>
-      <div>
-        <h1 className="text-3xl font-black">
-          Adress <span className="text-blue-700">Manager</span>
-        </h1>
-        <p className="text-gray-600">Verkaufsadressen nach PLZ verwalten</p>
-      </div>
+    <div className="text-center p-4 bg-white/60 rounded-2xl">
+      <div className={`text-3xl font-black ${color} mb-1`}>{value.toLocaleString('de-DE')}</div>
+      <div className="text-sm font-medium text-gray-600">{label}</div>
     </div>
   );
 });
 
-// Memoized Action Buttons component
-const ActionButtons = memo(({
-  isImporting,
-  allowExport,
-  isNative: _isNative, // kept for compatibility; unused here
-  onImportClick,
-  onExport,
-}: {
-  isImporting: boolean;
-  allowExport: boolean;
-  isNative: boolean;
-  onImportClick: () => void;
-  onExport: () => void;
-}) => {
-  const importButtonText = useMemo(
-    () => (isImporting ? 'Wird geladen...' : 'Excel/CSV hochladen'),
-    [isImporting]
-  );
+/** ----------------------------------------------------------------
+ *  Filtering & sorting (keeps existing API; safer & PLZ-aware)
+ *  ---------------------------------------------------------------- */
+const createAddressFilter = (searchTerm: string, filterBy: string, plzIndex: Map<number | string, string>) => {
+  const q = (searchTerm || '').trim().toLowerCase();
+  const qPlz = q.replace(/\D/g, ''); // numeric-only for PLZ intent
 
-  return (
-    <div className="flex flex-wrap gap-3">
-      <button
-        onClick={onImportClick}
-        disabled={isImporting}
-        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-md disabled:opacity-60 transition-all duration-200 hover:shadow-lg disabled:cursor-not-allowed"
-        type="button"
-        aria-label={importButtonText}
-      >
-        <span className="inline-flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5" /> {importButtonText}
-        </span>
-      </button>
+  return (address: Address) => {
+    if (q) {
+      const id = (address as any).id as number | string;
+      const plz = plzIndex.get(id) || 'Unbekannt';
+      const matches =
+        safe(address.address).includes(q) ||
+        safe(address.region).includes(q) ||
+        safe(address.notes).includes(q) ||
+        safe(address.buildingCompany).includes(q) ||
+        (!!qPlz && plz.includes(qPlz));
+      if (!matches) return false;
+    }
 
-      {allowExport && (
-        <button
-          onClick={onExport}
-          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg"
-          type="button"
-          aria-label="CSV exportieren"
-        >
-          <span className="inline-flex items-center gap-2">
-            <Download className="w-5 h-5" /> CSV exportieren
-          </span>
-        </button>
-      )}
-    </div>
-  );
-});
+    switch (filterBy) {
+      case 'kein_vertrag':
+        return (address.contractStatus ?? 0) === 0;
+      case 'mit_vertrag':
+        return (address.contractStatus ?? 0) > 0;
+      case 'has_notes':
+        return !!address.notes && address.notes.trim() !== '';
+      default:
+        return true;
+    }
+  };
+};
 
-// Memoized Search Input component
-const SearchInput = memo(({
-  searchTerm,
-  onSearchChange,
-}: {
-  searchTerm: string;
-  onSearchChange: (value: string) => void;
-}) => {
-  const handleInputChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      onSearchChange(e.target.value);
-    },
-    [onSearchChange]
-  );
+const createAddressSorter = (sortBy: string, plzIndex: Map<number | string, string>) => {
+  switch (sortBy) {
+    case 'PLZ':
+      return (a: Address, b: Address) => {
+        const pa = plzIndex.get((a as any).id as number | string) || 'Unbekannt';
+        const pb = plzIndex.get((b as any).id as number | string) || 'Unbekannt';
+        return cmpStr(pa, pb) || cmpStr(a.address, b.address);
+      };
+    case 'Region':
+      return (a: Address, b: Address) => cmpStr(a.region, b.region) || cmpStr(a.address, b.address);
+    case 'Adresse':
+      return (a: Address, b: Address) => cmpStr(a.address, b.address);
+    case 'Anzahl der Homes':
+      return (a: Address, b: Address) => cmpNumDesc(a.homes, b.homes);
+    case 'Preis Standardprodukt (€)':
+      return (a: Address, b: Address) => cmpNumDesc(a.price, b.price);
+    default:
+      return () => 0;
+  }
+};
 
-  return (
-    <div className="relative md:col-span-2">
-      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-      <input
-        type="text"
-        placeholder="Suche: PLZ, Adresse, Region, Baufirma..."
-        value={searchTerm}
-        onChange={handleInputChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300"
-        autoComplete="off"
-        spellCheck="false"
-      />
-    </div>
-  );
-});
+export default function AddressManager() {
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterBy, setFilterBy] = useState<'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes'>('all');
+  const [sortBy, setSortBy] = useState<'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)'>('PLZ');
+  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
+  const [isNative, setIsNative] = useState(false);
 
-// Filter options (static) without emojis for consistent UI
-const FILTER_OPTIONS: ReadonlyArray<{ value: FilterOption; label: string }> = [
-  { value: 'all', label: 'Alle Adressen' },
-  { value: 'kein_vertrag', label: 'Kein Vertrag (Spalte I = 0)' },
-  { value: 'mit_vertrag', label: 'Mit Vertrag (Spalte I > 0)' },
-  { value: 'has_notes', label: 'Mit Notizen' },
-] as const;
-
-// Memoized Filter Select component
-const FilterSelect = memo(({
-  filterBy,
-  onFilterChange,
-}: {
-  filterBy: FilterOption;
-  onFilterChange: (value: FilterOption) => void;
-}) => {
-  const handleSelectChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      onFilterChange(e.target.value as FilterOption);
-    },
-    [onFilterChange]
-  );
-
-  return (
-    <div className="relative">
-      <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-      <select
-        value={filterBy}
-        onChange={handleSelectChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Adressen filtern"
-      >
-        {FILTER_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-});
-
-// Sort options (static)
-const SORT_OPTIONS: ReadonlyArray<{ value: SortOption; label: string }> = [
-  { value: 'PLZ', label: 'Nach PLZ' },
-  { value: 'Region', label: 'Nach Region' },
-  { value: 'Adresse', label: 'Nach Adresse' },
-  { value: 'Anzahl der Homes', label: 'Nach Anzahl der Homes' },
-  { value: 'Preis Standardprodukt (€)', label: 'Nach Preis' },
-] as const;
-
-// Memoized Sort Select component
-const SortSelect = memo(({
-  sortBy,
-  onSortChange,
-}: {
-  sortBy: SortOption;
-  onSortChange: (value: SortOption) => void;
-}) => {
-  const handleSelectChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      onSortChange(e.target.value as SortOption);
-    },
-    [onSortChange]
-  );
-
-  return (
-    <div className="relative">
-      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-      <select
-        value={sortBy}
-        onChange={handleSelectChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Adressen sortieren"
-      >
-        {SORT_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-});
-
-// Memoized File Input component
-const FileInput = memo(({
-  onFilesSelected,
-  inputRef,
-}: {
-  onFilesSelected: (files: File[]) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
-}) => {
-  const handleFileChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []);
-      if (files.length > 0) {
-        onFilesSelected(files);
-      }
-      // Reset the input value to allow selecting the same file again
-      e.currentTarget.value = '';
-    },
-    [onFilesSelected]
-  );
-
-  return (
-    <input
-      ref={inputRef}
-      type="file"
-      accept=".xlsx,.xls,.csv"
-      multiple
-      className="hidden"
-      onChange={handleFileChange}
-      aria-label="Excel- oder CSV-Dateien auswählen"
-    />
-  );
-});
-
-/* --------------------------------- Main ---------------------------------- */
-
-export default function Controls(props: ControlsProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
+  useEffect(() => {
+    setIsNative(isNativeCapacitor());
   }, []);
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      props.setSearchTerm(value);
+  // Single PLZ index for the current list
+  const plzIndex = useMemo(() => buildPlzIndex(addresses), [addresses]);
+
+  // Memoized filter and sort using the PLZ index
+  const filterFn = useMemo(() => createAddressFilter(searchTerm, filterBy, plzIndex), [searchTerm, filterBy, plzIndex]);
+  const sortFn = useMemo(() => createAddressSorter(sortBy, plzIndex), [sortBy, plzIndex]);
+
+  // Grouping (PLZ priority; falls back to Region) — stable key order
+  const groupedAddresses = useMemo(() => {
+    const filtered = addresses.filter(filterFn);
+    filtered.sort(sortFn);
+
+    const grouped: Record<string, Address[]> = {};
+
+    if (sortBy === 'PLZ') {
+      for (const a of filtered) {
+        const id = (a as any).id as number | string;
+        const plz = plzIndex.get(id) || 'Unbekannt';
+        const key = `PLZ ${plz}`;
+        (grouped[key] ||= []).push(a);
+      }
+    } else {
+      for (const a of filtered) {
+        const key = a.region || 'Unbekannt';
+        (grouped[key] ||= []).push(a);
+      }
+    }
+
+    // Return an object with keys in sorted order to keep UI deterministic
+    const sortedKeys = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'de'));
+    const out: Record<string, Address[]> = {};
+    for (const k of sortedKeys) out[k] = grouped[k];
+    return out;
+  }, [addresses, filterFn, sortFn, sortBy, plzIndex]);
+
+  // Statistics (defensive defaults)
+  const statistics = useMemo(() => {
+    const totalHomes = addresses.reduce((sum, a) => sum + (a.homes ?? 0), 0);
+    const keinVertrag = addresses.filter(a => (a.contractStatus ?? 0) === 0).length;
+    const mitVertrag = addresses.filter(a => (a.contractStatus ?? 0) > 0).length;
+    const withNotes = addresses.filter(a => !!(a.notes && a.notes.trim())).length;
+    const totalValue = addresses.reduce((sum, a) => sum + (a.price ?? 0), 0);
+
+    const plzSet = new Set<string>();
+    for (const a of addresses) plzSet.add(plzIndex.get((a as any).id as number | string) || 'Unbekannt');
+
+    const potenzialPct = addresses.length ? Math.round((keinVertrag / addresses.length) * 100) : 0;
+
+    return {
+      totalHomes,
+      keinVertrag,
+      mitVertrag,
+      withNotes,
+      totalValue,
+      potenzialPct,
+      uniquePLZ: plzSet.size,
+      totalAddresses: addresses.length,
+      totalRegions: Object.keys(groupedAddresses).length,
+    };
+  }, [addresses, groupedAddresses, plzIndex]);
+
+  // Toggle expand/collapse for groups
+  const toggleRegion = useCallback((region: string) => {
+    setExpandedRegions(prev => {
+      const next = new Set(prev);
+      next.has(region) ? next.delete(region) : next.add(region);
+      return next;
+    });
+  }, []);
+
+  // Update a single address by id (keeps current id type)
+  const updateAddress = useCallback((id: number, patch: Partial<Address>) => {
+    setAddresses(prev => prev.map(a => ((a as any).id === id ? { ...a, ...patch } : a)));
+  }, []);
+
+  // Progress handling: simple interval that clears reliably
+  const onExcelChosen = useCallback(
+    async (files: File[]) => {
+      setIsImporting(true);
+      setImportProgress(0);
+      let timer: ReturnType<typeof setInterval> | null = null;
+
+      try {
+        timer = setInterval(() => setImportProgress(p => Math.min(p + 7, 93)), 120);
+
+        const { newAddresses, totalProcessed, duplicatesSkipped } = await importExcelFiles(files, addresses);
+
+        setAddresses(prev => [...prev, ...newAddresses]);
+        setImportStats({
+          totalProcessed,
+          imported: newAddresses.length,
+          duplicatesSkipped,
+          files: files.length,
+          message: 'Daten erfolgreich geladen!',
+        });
+
+        setImportProgress(100);
+      } catch (error: any) {
+        setImportStats({
+          totalProcessed: 0,
+          imported: 0,
+          duplicatesSkipped: 0,
+          files: files.length,
+          error: 'Import fehlgeschlagen: ' + (error?.message || String(error)),
+        });
+      } finally {
+        if (timer) clearInterval(timer);
+        setTimeout(() => {
+          setIsImporting(false);
+          setImportProgress(0);
+        }, 300);
+      }
     },
-    [props.setSearchTerm]
+    [addresses]
   );
 
-  const handleFilterChange = useCallback(
-    (value: FilterOption) => {
-      props.setFilterBy(value);
-    },
-    [props.setFilterBy]
-  );
+  const exportCSV = useCallback(() => {
+    saveDataToCSVNativeOrWeb(addresses, () => exportCSVWeb(addresses));
+  }, [addresses]);
 
-  const handleSortChange = useCallback(
-    (value: SortOption) => {
-      props.setSortBy(value);
-    },
-    [props.setSortBy]
-  );
-
-  const handleFilesSelected = useCallback(
-    (files: File[]) => {
-      props.onExcelChosen(files);
-    },
-    [props.onExcelChosen]
-  );
+  const hasAddresses = addresses.length > 0;
+  const hasGroupedAddresses = Object.keys(groupedAddresses).length > 0;
 
   return (
-    <div className="mb-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
-      {/* Header and Action Buttons */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-        <AppHeader isNative={props.isNative} />
+    <div className="relative">
+      <Controls
+        isImporting={isImporting}
+        onExcelChosen={onExcelChosen}
+        allowExport={hasAddresses}
+        onExport={exportCSV}
+        isNative={isNative}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filterBy={filterBy}
+        setFilterBy={setFilterBy}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+      />
 
-        <ActionButtons
-          isImporting={props.isImporting}
-          allowExport={props.allowExport}
-          isNative={props.isNative}
-          onImportClick={handleImportClick}
-          onExport={props.onExport}
-        />
-      </div>
+      {/* Import Status */}
+      {isImporting && (
+        <div className="my-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
+          <div className="mb-3 font-bold">Import läuft...</div>
+          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-4 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out"
+              style={{ width: `${importProgress}%` }}
+            />
+          </div>
+          <div className="mt-2 text-sm text-gray-600">{importProgress}%</div>
+        </div>
+      )}
 
-      {/* Hidden File Input */}
-      <FileInput onFilesSelected={handleFilesSelected} inputRef={fileInputRef} />
+      {/* Import Results */}
+      {importStats && (
+        <div
+          className={`my-8 rounded-3xl p-6 border ${
+            importStats.error ? 'bg-red-50/80 border-red-200' : 'bg-emerald-50/80 border-emerald-200'
+          }`}
+        >
+          <div
+            className={`flex items-center gap-3 font-bold text-lg ${
+              importStats.error ? 'text-red-800' : 'text-emerald-800'
+            }`}
+          >
+            {importStats.error ? <X /> : <Check />}
+            {importStats.error ? 'Import fehlgeschlagen' : importStats.message || 'Import erfolgreich'}
+          </div>
+          {!importStats.error && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <Stat label="Verarbeitet" value={importStats.totalProcessed} />
+              <Stat label="Importiert" value={importStats.imported} highlight="green" />
+              <Stat label="Duplikate übersprungen" value={importStats.duplicatesSkipped} highlight="amber" />
+            </div>
+          )}
+          {importStats.error && (
+            <div className="mt-4 p-4 bg-red-100 rounded-lg">
+              <p className="text-red-800 text-sm">{importStats.error}</p>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Search and Filter Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <SearchInput searchTerm={props.searchTerm} onSearchChange={handleSearchChange} />
+      {/* Main content */}
+      {!hasGroupedAddresses ? (
+        <EmptyState isNative={isNative} />
+      ) : (
+        <>
+          <RegionList grouped={groupedAddresses} expanded={expandedRegions} onToggle={toggleRegion} onUpdate={updateAddress} />
 
-        <FilterSelect filterBy={props.filterBy} onFilterChange={handleFilterChange} />
+          {/* Stats Dashboard */}
+          <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
+            <h3 className="text-2xl font-black flex items-center gap-2 mb-6">
+              <BarChart3 /> Verkaufs-Übersicht
+            </h3>
 
-        <SortSelect sortBy={props.sortBy} onSortChange={handleSortChange} />
-      </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+              <KPI label="🎯 Kein Vertrag" value={statistics.keinVertrag} icon={<Target className="w-6 h-6 text-red-500" />} />
+              <KPI label="✅ Mit Vertrag" value={statistics.mitVertrag} icon={<Check className="w-6 h-6 text-green-500" />} />
+              <KPI label="📍 PLZ Bereiche" value={statistics.uniquePLZ} icon={<MapPin className="w-6 h-6 text-blue-500" />} />
+              <KPI label="🏠 Homes gesamt" value={statistics.totalHomes} />
+            </div>
+
+            <div className="mb-8 p-6 bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl border border-orange-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Target className="w-5 h-5 text-red-500" />
+                  Verkaufspotenzial
+                </h4>
+                <span className="text-3xl font-black text-red-600">{statistics.potenzialPct}%</span>
+              </div>
+              <div className="w-full h-4 bg-white rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-4 bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500 ease-out"
+                  style={{ width: `${statistics.potenzialPct}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-700">
+                <strong>{statistics.keinVertrag.toLocaleString('de-DE')} Adressen</strong> ohne Vertrag = Verkaufschancen!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Stat label="Adressen gesamt" value={statistics.totalAddresses} />
+              <Stat label="Mit Notizen" value={statistics.withNotes} highlight="green" />
+              <Stat label="Gruppierungen" value={statistics.totalRegions} />
+              <Stat label="Gesamtwert (€)" value={Math.round(statistics.totalValue)} />
+            </div>
+
+            {sortBy === 'PLZ' && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  <strong>PLZ-Ansicht aktiv:</strong> Adressen sind nach Postleitzahlen gruppiert für optimale regionale Bearbeitung.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
