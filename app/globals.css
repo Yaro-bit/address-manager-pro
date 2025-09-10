@@ -1,5 +1,24 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* globals.css – keep your existing Tailwind imports at the top */
 
-html, body { height: 100%; }
+/* Disable hover-only transforms on touch (prevents jank on iPad) */
+@media (hover: none) {
+  .touch-no-hover:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Larger default hit-area for buttons/controls */
+.touch-target {
+  min-height: 3rem; /* ~48px comfortable touch target */
+}
+
+/* Momentum scrolling for iOS areas that may overflow */
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Card utility (reuse across sections for consistency) */
+.card {
+  @apply bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30;
+}
