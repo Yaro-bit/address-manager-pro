@@ -3,7 +3,7 @@ import './globals.css';
 import type { ReactNode } from 'react';
 
 export const metadata = {
-  title: 'Address Manager Pro',
+  title: 'Address Manager',
   description: 'Excel-powered address portfolio management',
 };
 
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           <div className="mx-auto px-4 py-3 flex items-center justify-between max-w-screen-lg md:max-w-screen-xl">
             <div className="font-black tracking-tight text-lg">
-              Address <span className="text-blue-700">Manager</span> Pro
+              Address <span className="text-blue-700">Manager</span> Demo
             </div>
             <div className="text-sm text-gray-600">v0.0.2</div>
           </div>
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
         <footer className="mt-12 md:mt-16 border-t border-white/60 bg-white/40">
           <div className="mx-auto px-4 py-6 text-sm text-gray-600 max-w-screen-lg md:max-w-screen-xl">
-            © {new Date().getFullYear()} Address Manager Pro
+            © {new Date().getFullYear()} Address Manager
           </div>
         </footer>
       </body>
