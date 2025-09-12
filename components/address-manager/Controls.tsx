@@ -326,29 +326,29 @@ export default function Controls(props: ControlsProps) {
         {/* Empty column for better spacing on desktop */}
         <div className="hidden lg:block"></div>
       </div>
-
-{/* Enhanced Help Section */}
-<div className="bg-blue-50/50 rounded-xl p-4 border border-blue-200/50 space-y-3">
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-    <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
-      <span className="flex-shrink-0">💡</span>
-      <span>Tipp:</span>
-    </div>
-    <p className="text-blue-700 text-sm leading-relaxed">
-      Nutze die <strong>Suche</strong> um spezifische Adressen zu finden, dann wende <strong>Filter</strong> an um nach Vertragsstatus oder Notizen zu filtern.
-      Die <strong>PLZ-Ansicht</strong> gruppiert optimal für regionale Bearbeitung.
-    </p>
-  </div>
-
-  <div className="text-blue-700 text-sm leading-relaxed">
-    <p className="font-medium mb-1">So gehst du vor:</p>
-    <ol className="list-decimal list-inside space-y-1">
-      <li><strong>CSV oder Excel importieren:</strong> Daten werden gespeichert, Duplikate automatisch entfernt.</li>
-      <li><strong>Arbeiten:</strong> Sortiere, filtere und notiere wichtige Informationen.</li>
-      <li><strong>Exportieren:</strong> Speichere deine Änderungen dauerhaft als CSV.</li>
-    </ol>
-  </div>
-</div>
+  
+        {/* Enhanced Help Section */}
+        <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-200/50 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
+              <span className="flex-shrink-0">💡</span>
+              <span>Tipp:</span>
+            </div>
+            <p className="text-blue-700 text-sm leading-relaxed">
+              Nutze die <strong>Suche</strong> um spezifische Adressen zu finden, dann wende <strong>Filter</strong> an um nach Vertragsstatus oder Notizen zu filtern.
+              Die <strong>PLZ-Ansicht</strong> gruppiert optimal für regionale Bearbeitung.
+            </p>
+          </div>
+        
+          <div className="text-blue-700 text-sm leading-relaxed">
+            <p className="font-medium mb-1">So gehst du vor:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li><strong>CSV oder Excel importieren:</strong> Daten werden gespeichert, Duplikate automatisch entfernt.</li>
+              <li><strong>Arbeiten:</strong> Sortiere, filtere und notiere wichtige Informationen.</li>
+              <li><strong>Exportieren:</strong> Speichere deine Änderungen dauerhaft als CSV.</li>
+            </ol>
+          </div>
+        </div>
 
         
         {/* Quick Stats Preview */}
