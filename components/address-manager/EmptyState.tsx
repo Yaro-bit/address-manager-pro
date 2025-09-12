@@ -1,28 +1,37 @@
 'use client';
 
 import { FileSpreadsheet, Smartphone } from 'lucide-react';
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 
-/* ------------------------------ Enhanced Card ------------------------------ */
-const FeatureCard = memo(({
-  icon,
-  title,
-  desc,
-  highlight = false,
-}: {
+/* ------------------------------ Types ------------------------------------- */
+interface EmptyStateProps {
+  isNative: boolean;
+}
+
+interface FeatureCardProps {
   icon: React.ReactNode;
   title: string;
   desc: string;
   highlight?: boolean;
-}) => {
+}
+
+/* ------------------------------ Feature Card ------------------------------ */
+const FeatureCard = memo(function FeatureCard({
+  icon,
+  title,
+  desc,
+  highlight = false,
+}: FeatureCardProps) {
   return (
     <div
+      tabIndex={0}
       className={`p-6 rounded-2xl border transition-all duration-200 touch-target select-none
       motion-safe:transition-transform motion-reduce:transition-none
-      active:scale-[0.98] md:hover:scale-105 md:hover:shadow-lg
+      md:[@media(hover:hover)]:hover:scale-[1.03] md:[@media(hover:hover)]:hover:shadow-lg
+      active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60
       ${highlight
-        ? 'bg-blue-50/80 border-blue-200/50 md:hover:bg-blue-50'
-        : 'bg-white/60 border-gray-200/50 md:hover:bg-white/80'}`}
+        ? 'bg-blue-50/80 border-blue-200/60 md:[@media(hover:hover)]:hover:bg-blue-50'
+        : 'bg-white/60 border-gray-200/60 md:[@media(hover:hover)]:hover:bg-white/80'}`}
     >
       <div
         className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4 ${
@@ -38,24 +47,18 @@ const FeatureCard = memo(({
   );
 });
 
-/* ------------------------------ Header Section ----------------------------- */
-const EmptyStateHeader = memo(({ isNative }: { isNative: boolean }) => {
-  const { icon, title, description } = useMemo(() => {
-    if (isNative) {
-      return {
-        icon: <Smartphone className="w-16 h-16 text-blue-500" aria-hidden="true" />,
-        title: 'Bereit für mobilen Import',
-        description:
-          'Nutze die nativen iOS/Android-Funktionen für optimale Performance mit deinen Excel-Dateien und bis zu 78.000+ Adressen.',
-      };
-    }
-    return {
-      icon: <FileSpreadsheet className="w-16 h-16 text-blue-500" aria-hidden="true" />,
-      title: 'Bereit für Excel-Import',
-      description:
-        'Importiere deine ISP/Telekom-Adressdateien und manage bis zu 78.000+ Adressen mit professionellen Analyse-Tools.',
-    };
-  }, [isNative]);
+/* ------------------------------ Header ------------------------------------ */
+const EmptyStateHeader = memo(function EmptyStateHeader({ isNative }: EmptyStateProps) {
+  const icon = isNative ? (
+    <Smartphone className="w-16 h-16 text-blue-500" aria-hidden="true" />
+  ) : (
+    <FileSpreadsheet className="w-16 h-16 text-blue-500" aria-hidden="true" />
+  );
+
+  const title = isNative ? 'Bereit für mobilen Import' : 'Bereit für Excel-Import';
+  const description = isNative
+    ? 'Nutze die nativen iOS/Android-Funktionen für optimale Performance mit deinen Excel-Dateien und bis zu 78.000+ Adressen.'
+    : 'Importiere deine ISP/Telekom-Adressdateien und manage bis zu 78.000+ Adressen mit professionellen Analyse-Tools.';
 
   return (
     <div className="text-center mb-8">
@@ -74,7 +77,7 @@ const EmptyStateHeader = memo(({ isNative }: { isNative: boolean }) => {
 });
 
 /* ------------------------------ Feature Cards ------------------------------ */
-const FeatureCards = ({ isNative }: { isNative: boolean }) => {
+const FeatureCards = ({ isNative }: EmptyStateProps) => {
   const items = [
     {
       title: isNative ? 'Schneller Datei-Import' : 'Excel-Import',
@@ -82,36 +85,44 @@ const FeatureCards = ({ isNative }: { isNative: boolean }) => {
         ? 'Direkt aus der Dateien-App oder geteilten Inhalten.'
         : 'Lade .xlsx/.csv hoch und starte sofort.',
       highlight: true,
+      icon: isNative ? (
+        <Smartphone className="w-6 h-6" aria-hidden="true" />
+      ) : (
+        <FileSpreadsheet className="w-6 h-6" aria-hidden="true" />
+      ),
     },
     {
       title: 'Analyse-Tools',
       desc: 'Filter, PLZ-Mapping und KPI-Übersichten.',
       highlight: false,
+      icon: <FileSpreadsheet className="w-6 h-6" aria-hidden="true" />,
     },
     {
       title: 'Teilen & Exportieren',
       desc: 'Ergebnisse als CSV/Excel weitergeben.',
       highlight: false,
+      icon: <FileSpreadsheet className="w-6 h-6" aria-hidden="true" />,
     },
   ];
+
   return (
-    <div role="list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 [contain:content]">
       {items.map((it, i) => (
-        <div role="listitem" key={i}>
+        <li key={i}>
           <FeatureCard
-            icon={<FileSpreadsheet className="w-6 h-6" aria-hidden="true" />}
+            icon={it.icon}
             title={it.title}
             desc={it.desc}
             highlight={it.highlight}
           />
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 };
 
 /* -------------------------- Getting Started Section ------------------------ */
-const GettingStartedSection = ({ isNative }: { isNative: boolean }) => {
+const GettingStartedSection = ({ isNative }: EmptyStateProps) => {
   return (
     <div className="mt-8 text-sm text-gray-700">
       {isNative
@@ -121,10 +132,57 @@ const GettingStartedSection = ({ isNative }: { isNative: boolean }) => {
   );
 };
 
-/* --------------------------------- Export --------------------------------- */
-export default function EmptyState({ isNative }: { isNative: boolean }) {
+/* ------------------------------- Footer ----------------------------------- */
+function AppFooter() {
   return (
-    <div
+    <footer className="mt-16 border-t border-gray-200 pt-6 text-sm text-gray-600 text-center">
+      <p className="mb-2">
+        © {new Date().getFullYear()} Address Manager Pro. Lizenziert unter{' '}
+        <a
+          href="https://opensource.org/licenses/MIT"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+        >
+          MIT
+        </a>
+        .
+      </p>
+      <nav className="flex justify-center gap-6">
+        <a
+          href="https://github.com/Yaro-bit"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-blue-600"
+        >
+          GitHub
+        </a>
+        <a
+          href="https://www.linkedin.com/in/yaroslav-v-b7876a211/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-blue-600"
+        >
+          LinkedIn
+        </a>
+        <a
+          href="https://github.com/Yaro-bit"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-blue-600"
+        >
+          Website
+        </a>
+      </nav>
+    </footer>
+  );
+}
+
+/* --------------------------------- Export --------------------------------- */
+export default function EmptyState({ isNative }: EmptyStateProps) {
+  return (
+    <section
+      aria-labelledby="empty-state-title"
       className="p-8 md:p-12 lg:p-16 text-center rounded-3xl shadow-2xl border
       bg-white/90 border-white/30
       supports-[backdrop-filter:blur(0px)]:bg-white/70 supports-[backdrop-filter:blur(0px)]:backdrop-blur-xl"
@@ -135,9 +193,13 @@ export default function EmptyState({ isNative }: { isNative: boolean }) {
         paddingRight: 'env(safe-area-inset-right)',
       }}
     >
+      <h2 id="empty-state-title" className="sr-only">
+        Leerer Zustand
+      </h2>
       <EmptyStateHeader isNative={isNative} />
       <FeatureCards isNative={isNative} />
       <GettingStartedSection isNative={isNative} />
-    </div>
+      <AppFooter />
+    </section>
   );
 }
