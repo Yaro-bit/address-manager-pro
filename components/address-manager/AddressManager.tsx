@@ -7,7 +7,7 @@ import { isNativeCapacitor, saveDataToCSVNativeOrWeb } from '@/lib/native';
 import Controls from './Controls';
 import RegionList from './RegionList';
 import EmptyState from './EmptyState';
-import { BarChart3, Check, X, Target, MapPin } from 'lucide-react';
+import { BarChart3, Check, X, Target, MapPin, User, Calendar, FileCheck, Home } from 'lucide-react';
 
 /** ----------------------------------------------------------------
  *  Helpers (safe string ops, comparisons, optimized PLZ detection)
@@ -188,6 +188,15 @@ const createAddressFilter = (searchTerm: string, filterBy: string, plzIndex: Map
       case 'has_notes':
         categoryMatch = !!(address.notes?.trim());
         break;
+      case 'customer_met':
+        categoryMatch = address.customerMet === true;
+        break;
+      case 'appointment_set':
+        categoryMatch = address.appointmentSet === true;
+        break;
+      case 'contract_signed':
+        categoryMatch = address.contractSigned === true;
+        break;
       case 'all':
       default:
         categoryMatch = true;
@@ -243,10 +252,11 @@ export default function AddressManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes'>('all');
+  const [filterBy, setFilterBy] = useState<'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes' | 'customer_met' | 'appointment_set' | 'contract_signed'>('all');
   const [sortBy, setSortBy] = useState<'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)'>('PLZ');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const [isNative, setIsNative] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   useEffect(() => {
     setIsNative(isNativeCapacitor());
@@ -291,7 +301,7 @@ export default function AddressManager() {
     return out;
   }, [addresses, filterFn, sortFn, sortBy, plzIndex]);
 
-  // Enhanced statistics with ISP-specific metrics
+  // Enhanced statistics with Customer Tracking metrics
   const statistics = useMemo(() => {
     console.time('Statistics Calculation');
     
@@ -303,6 +313,17 @@ export default function AddressManager() {
       totalValue: 0,
       inOperation: 0, // "100 In Betrieb"
       completedBuilds: 0,
+      
+      // New customer tracking statistics
+      customersMet: 0,
+      appointmentsSet: 0,
+      contractsSigned: 0,
+      objectsAvailable: 0,
+      
+      // Combined tracking stats
+      noCustomerContact: 0,  // No customer met, no appointment
+      activeLeads: 0,        // Customer met but no contract yet
+      completedDeals: 0,     // Contract signed
     };
     
     // Process in chunks for large datasets
@@ -333,6 +354,26 @@ export default function AddressManager() {
         if (address.completionDone) {
           stats.completedBuilds++;
         }
+        
+        // New customer tracking stats
+        if (address.customerMet) stats.customersMet++;
+        if (address.appointmentSet) stats.appointmentsSet++;
+        if (address.contractSigned) stats.contractsSigned++;
+        if (address.objectAvailable) stats.objectsAvailable++;
+        
+        // Combined tracking logic
+        const hasCustomerContact = address.customerMet || address.appointmentSet;
+        const hasContract = address.contractSigned;
+        
+        if (!hasCustomerContact) {
+          stats.noCustomerContact++;
+        } else if (hasCustomerContact && !hasContract) {
+          stats.activeLeads++;
+        }
+        
+        if (hasContract) {
+          stats.completedDeals++;
+        }
       }
     }
     
@@ -344,6 +385,8 @@ export default function AddressManager() {
     
     const potenzialPct = addresses.length ? Math.round((stats.keinVertrag / addresses.length) * 100) : 0;
     const operationalPct = addresses.length ? Math.round((stats.inOperation / addresses.length) * 100) : 0;
+    const customerContactPct = addresses.length ? Math.round((stats.customersMet / addresses.length) * 100) : 0;
+    const conversionRate = stats.customersMet ? Math.round((stats.contractsSigned / stats.customersMet) * 100) : 0;
     
     console.timeEnd('Statistics Calculation');
     
@@ -351,6 +394,8 @@ export default function AddressManager() {
       ...stats,
       potenzialPct,
       operationalPct,
+      customerContactPct,
+      conversionRate,
       uniquePLZ: plzSet.size,
       totalAddresses: addresses.length,
       totalRegions: Object.keys(groupedAddresses).length,
@@ -367,9 +412,25 @@ export default function AddressManager() {
     });
   }, []);
 
-  // Update a single address by id (keeps current id type)
+  // Enhanced updateAddress function with automatic save indicator
   const updateAddress = useCallback((id: number, patch: Partial<Address>) => {
-    setAddresses(prev => prev.map(a => ((a as any).id === id ? { ...a, ...patch } : a)));
+    setAddresses(prev => {
+      const updated = prev.map(a => ((a as any).id === id ? { ...a, ...patch } : a));
+      
+      // Show save indicator for critical updates
+      const isCriticalUpdate = 
+        patch.customerMet !== undefined ||
+        patch.appointmentSet !== undefined ||
+        patch.contractSigned !== undefined ||
+        patch.objectAvailable !== undefined ||
+        patch.notes !== undefined;
+      
+      if (isCriticalUpdate) {
+        setLastSaved(new Date());
+      }
+      
+      return updated;
+    });
   }, []);
 
   // Enhanced progress handling with better UX for large files
@@ -415,7 +476,7 @@ export default function AddressManager() {
         setTimeout(() => {
           setIsImporting(false);
           setImportProgress(0);
-        }, 500); // Slightly longer delay to show completion
+        }, 500);
       }
     },
     [addresses]
@@ -430,6 +491,16 @@ export default function AddressManager() {
 
   return (
     <div className="relative">
+      {/* Save Status Indicator */}
+      {lastSaved && (
+        <div className="fixed top-4 right-4 z-50 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-green-200">
+          <div className="flex items-center gap-2 text-sm text-green-700">
+            <Check className="w-4 h-4" />
+            <span>Gespeichert: {lastSaved.toLocaleTimeString('de-DE')}</span>
+          </div>
+        </div>
+      )}
+
       <Controls
         isImporting={isImporting}
         onExcelChosen={onExcelChosen}
@@ -500,12 +571,13 @@ export default function AddressManager() {
         <>
           <RegionList grouped={groupedAddresses} expanded={expandedRegions} onToggle={toggleRegion} onUpdate={updateAddress} />
 
-          {/* Enhanced Stats Dashboard with ISP-specific metrics */}
+          {/* Enhanced Stats Dashboard with Customer Tracking */}
           <div className="mt-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-6 md:p-8">
             <h3 className="text-xl md:text-2xl font-black flex items-center gap-2 mb-6">
-              <BarChart3 /> Verkaufs-Übersicht
+              <BarChart3 /> Verkaufs & Kundenkontakt Übersicht
             </h3>
 
+            {/* Main KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
               <KPI 
                 label="Kein Vertrag" 
@@ -520,14 +592,90 @@ export default function AddressManager() {
                 variant="success"
               />
               <KPI 
-                label="PLZ Bereiche" 
-                value={statistics.uniquePLZ} 
-                icon={<MapPin className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />} 
+                label="Kunden getroffen" 
+                value={statistics.customersMet} 
+                icon={<User className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />} 
               />
               <KPI 
-                label="Homes gesamt" 
-                value={statistics.totalHomes} 
+                label="Verträge signiert" 
+                value={statistics.contractsSigned} 
+                icon={<FileCheck className="w-5 h-5 md:w-6 md:h-6 text-purple-500" />} 
+                variant="success"
               />
+            </div>
+
+            {/* Customer Contact Progress Section */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+                <h4 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <User className="w-5 h-5 text-blue-500" />
+                  Kundenkontakt Rate
+                </h4>
+                <div className="text-right">
+                  <span className="text-2xl md:text-3xl font-black text-blue-600">{statistics.customerContactPct}%</span>
+                  <div className="text-sm text-gray-600">kontaktiert</div>
+                </div>
+              </div>
+              <div className="w-full h-4 bg-white rounded-full overflow-hidden mb-3">
+                <div
+                  className="h-4 bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500 ease-out"
+                  style={{ width: `${statistics.customerContactPct}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-700">
+                <strong>{statistics.customersMet.toLocaleString('de-DE')} Kunden</strong> wurden bereits getroffen
+              </p>
+            </div>
+
+            {/* Conversion Rate Section */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+                <h4 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <FileCheck className="w-5 h-5 text-green-500" />
+                  Conversion Rate
+                </h4>
+                <div className="text-right">
+                  <span className="text-2xl md:text-3xl font-black text-green-600">{statistics.conversionRate}%</span>
+                  <div className="text-sm text-gray-600">Abschlussrate</div>
+                </div>
+              </div>
+              <div className="w-full h-4 bg-white rounded-full overflow-hidden mb-3">
+                <div
+                  className="h-4 bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500 ease-out"
+                  style={{ width: `${statistics.conversionRate}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-700">
+                Von <strong>{statistics.customersMet.toLocaleString('de-DE')} getroffenen Kunden</strong> haben{' '}
+                <strong>{statistics.contractsSigned.toLocaleString('de-DE')}</strong> einen Vertrag unterschrieben
+              </p>
+            </div>
+
+            {/* Customer Tracking Grid */}
+            <div className="mb-6">
+              <h4 className="text-lg font-bold text-gray-800 mb-4">Kundenkontakt Details</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Stat 
+                  label="Termine gesetzt" 
+                  value={statistics.appointmentsSet} 
+                  highlight="amber" 
+                />
+                <Stat 
+                  label="Objekte vorhanden" 
+                  value={statistics.objectsAvailable} 
+                  highlight="green" 
+                />
+                <Stat 
+                  label="Aktive Leads" 
+                  value={statistics.activeLeads} 
+                  highlight="amber" 
+                />
+                <Stat 
+                  label="Kein Kontakt" 
+                  value={statistics.noCustomerContact} 
+                  highlight="red" 
+                />
+              </div>
             </div>
 
             {/* Enhanced Potential Section */}
@@ -550,21 +698,22 @@ export default function AddressManager() {
               </div>
               <p className="text-sm text-gray-700">
                 <strong>{statistics.keinVertrag.toLocaleString('de-DE')} Adressen</strong> ohne Vertrag = Verkaufschancen!
+                <br />
+                <strong>{statistics.noCustomerContact.toLocaleString('de-DE')} davon</strong> wurden noch nicht kontaktiert.
               </p>
             </div>
 
-            {/* Enhanced Statistics Grid */}
+            {/* General Statistics Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Stat label="Adressen gesamt" value={statistics.totalAddresses} />
-              <Stat label="In Betrieb" value={statistics.inOperation} highlight="green" />
+              <Stat label="PLZ Bereiche" value={statistics.uniquePLZ} />
+              <Stat label="Homes gesamt" value={statistics.totalHomes} />
               <Stat label="Mit Notizen" value={statistics.withNotes} />
-              <Stat label="Gruppierungen" value={statistics.totalRegions} />
             </div>
 
-            {/* Additional ISP-specific insights */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <Stat label="Ø Preis/Home (€)" value={statistics.avgPricePerHome} />
-              <Stat label="Operationsrate (%)" value={statistics.operationalPct} highlight="green" />
+              <Stat label="In Betrieb" value={statistics.inOperation} highlight="green" />
             </div>
 
             {/* PLZ View Info */}

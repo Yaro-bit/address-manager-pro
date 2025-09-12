@@ -23,4 +23,10 @@ export type Address = {
 
   notes: string; // required, can be empty string
   imported?: boolean; // system flag
+
+  // New customer tracking fields
+  customerMet?: boolean;      // kunde angetroffen ja/nein
+  appointmentSet?: boolean;   // termin ja/nein
+  contractSigned?: boolean;   // vertragsabschluss ja/nein
+  objectAvailable?: boolean;  // objekt vorhanden ja/nein
 };

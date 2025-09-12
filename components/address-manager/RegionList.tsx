@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronRight, MapPin, Building, DollarSign, Edit3, Save, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, MapPin, Building, DollarSign, Edit3, Save, X, User, Calendar, FileCheck, Home, Check } from 'lucide-react';
 import { Address } from '@/lib/types';
 import React, { memo, useMemo, useCallback, useState, KeyboardEvent } from 'react';
 
@@ -63,6 +63,44 @@ const PriceBadge = memo(({ price }: { price: number }) => {
   );
 });
 
+/* -------------------------------- Customer Tracking Checkboxes ------------------------------ */
+const BooleanCheckbox = memo(({ 
+  value, 
+  onChange, 
+  label, 
+  icon, 
+  trueColor = 'text-green-600', 
+  falseColor = 'text-gray-400' 
+}: {
+  value?: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  icon: React.ReactNode;
+  trueColor?: string;
+  falseColor?: string;
+}) => (
+  <div className="flex flex-col items-center gap-1 min-w-[80px]">
+    <button
+      onClick={() => onChange(!value)}
+      className={`p-2 rounded-lg border-2 transition-all duration-200 hover:shadow-md ${
+        value 
+          ? 'bg-green-50 border-green-200 hover:bg-green-100' 
+          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+      }`}
+      title={`${label}: ${value ? 'Ja' : 'Nein'}`}
+    >
+      <div className={`flex items-center justify-center ${value ? trueColor : falseColor}`}>
+        {value ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+      </div>
+    </button>
+    <div className="text-xs text-center font-medium text-gray-600 leading-tight">
+      {label.split(' ').map((word, i) => (
+        <div key={i}>{word}</div>
+      ))}
+    </div>
+  </div>
+));
+
 /* -------------------------------- NotesEditor ------------------------------ */
 const NotesEditor = memo(({ 
   notes, 
@@ -91,8 +129,8 @@ const NotesEditor = memo(({
     setDraft(notes || '');
   }, [notes]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
@@ -101,40 +139,43 @@ const NotesEditor = memo(({
     }
   }, [handleSave, handleCancel]);
 
-  const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(e.target.value);
   }, []);
 
   if (editing) {
     return (
-      <div className="flex gap-2 items-center w-full">
-        <input
+      <div className="flex gap-2 items-start w-full">
+        <textarea
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleKeyDown}
-          className="flex-1 px-3 py-2 text-sm border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white transition-all duration-200 min-h-[36px]"
+          className="flex-1 px-3 py-2 text-sm border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white transition-all duration-200 resize-none"
+          rows={3}
           autoFocus
           placeholder="Notiz hinzufügen..."
           aria-label="Notiz bearbeiten"
         />
-        <button
-          onClick={handleSave}
-          className="p-2 text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors duration-200 min-h-[36px] min-w-[36px] flex items-center justify-center"
-          title="Speichern"
-          type="button"
-          aria-label="Notiz speichern"
-        >
-          <Save className="w-4 h-4" aria-hidden="true" />
-        </button>
-        <button
-          onClick={handleCancel}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors duration-200 min-h-[36px] min-w-[36px] flex items-center justify-center"
-          title="Abbrechen"
-          type="button"
-          aria-label="Bearbeitung abbrechen"
-        >
-          <X className="w-4 h-4" aria-hidden="true" />
-        </button>
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={handleSave}
+            className="p-2 text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors duration-200 min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Speichern (Strg+Enter)"
+            type="button"
+            aria-label="Notiz speichern"
+          >
+            <Save className="w-4 h-4" aria-hidden="true" />
+          </button>
+          <button
+            onClick={handleCancel}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors duration-200 min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Abbrechen (Esc)"
+            type="button"
+            aria-label="Bearbeitung abbrechen"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     );
   }
@@ -148,7 +189,7 @@ const NotesEditor = memo(({
     >
       <div className="flex-1 min-w-0">
         {notes ? (
-          <span className="text-sm font-medium text-gray-900 break-words">{notes}</span>
+          <span className="text-sm font-medium text-gray-900 break-words whitespace-pre-wrap">{notes}</span>
         ) : (
           <span className="text-sm text-gray-500 italic">Klicken für Notiz...</span>
         )}
@@ -166,6 +207,10 @@ const AddressRow = memo(({
   addr: Address; 
   onUpdate: (id: number, patch: Partial<Address>) => void;
 }) => {
+  const handleBooleanChange = useCallback((field: keyof Address, value: boolean) => {
+    onUpdate(addr.id, { [field]: value });
+  }, [onUpdate, addr.id]);
+
   return (
     <div className="p-4 md:p-6 border border-gray-100/50 hover:bg-white/40 rounded-2xl transition-colors duration-200 mb-4">
       {/* Mobile Layout (< lg) */}
@@ -201,58 +246,137 @@ const AddressRow = memo(({
           <ContractBadge contractStatus={addr.contractStatus ?? 0} />
         </div>
         
-        {/* Mobile Notes */}
-        <div className="border-t border-gray-100 pt-3">
-          <NotesEditor 
-            notes={addr.notes} 
-            onUpdate={onUpdate} 
-            addressId={addr.id as unknown as number} 
-          />
+        {/* Mobile Notes and Customer Tracking */}
+        <div className="border-t border-gray-100 pt-3 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Notizen</label>
+            <NotesEditor 
+              notes={addr.notes} 
+              onUpdate={onUpdate} 
+              addressId={addr.id} 
+            />
+          </div>
+          
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Kundenkontakt Status</label>
+            <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50/50 rounded-lg">
+              <BooleanCheckbox
+                value={addr.customerMet}
+                onChange={(value) => handleBooleanChange('customerMet', value)}
+                label="Kunde angetroffen"
+                icon={<User className="w-4 h-4" />}
+              />
+              <BooleanCheckbox
+                value={addr.appointmentSet}
+                onChange={(value) => handleBooleanChange('appointmentSet', value)}
+                label="Termin"
+                icon={<Calendar className="w-4 h-4" />}
+              />
+              <BooleanCheckbox
+                value={addr.contractSigned}
+                onChange={(value) => handleBooleanChange('contractSigned', value)}
+                label="Vertragsabschluss"
+                icon={<FileCheck className="w-4 h-4" />}
+                trueColor="text-blue-600"
+              />
+              <BooleanCheckbox
+                value={addr.objectAvailable}
+                onChange={(value) => handleBooleanChange('objectAvailable', value)}
+                label="Objekt vorhanden"
+                icon={<Home className="w-4 h-4" />}
+                trueColor="text-purple-600"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Desktop Layout (>= lg) */}
-      <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center">
+      <div className="hidden lg:block space-y-4">
         {/* Address Information */}
-        <div className="col-span-4">
-          <div className="font-bold text-lg break-words">{addr.address}</div>
-          <div className="text-gray-600 text-sm flex items-center gap-3 mt-1">
-            <span>{addr.ano ?? ''}</span>
-          </div>
-          {addr.addressCode && (
-            <div className="text-xs text-gray-500 mt-2 font-mono bg-gray-100 px-2 py-1 rounded inline-block">
-              ID: {addr.addressCode}
+        <div className="grid grid-cols-12 gap-4 items-center">
+          <div className="col-span-4">
+            <div className="font-bold text-lg break-words">{addr.address}</div>
+            <div className="text-gray-600 text-sm flex items-center gap-3 mt-1">
+              <span>{addr.ano ?? ''}</span>
             </div>
-          )}
+            {addr.addressCode && (
+              <div className="text-xs text-gray-500 mt-2 font-mono bg-gray-100 px-2 py-1 rounded inline-block">
+                ID: {addr.addressCode}
+              </div>
+            )}
+          </div>
+
+          {/* Homes Count */}
+          <div className="col-span-1 flex justify-center">
+            <HomesBadge homes={addr.homes ?? 0} />
+          </div>
+
+          {/* Status */}
+          <div className="col-span-1 flex justify-center">
+            <StatusBadge status={addr.status} />
+          </div>
+
+          {/* Contract Status */}
+          <div className="col-span-2 flex justify-center">
+            <ContractBadge contractStatus={addr.contractStatus ?? 0} />
+          </div>
+
+          {/* Price */}
+          <div className="col-span-1 flex justify-center">
+            <PriceBadge price={addr.price ?? 0} />
+          </div>
+
+          {/* Quick Stats */}
+          <div className="col-span-3 text-right text-sm text-gray-600">
+            <span>Weitere Details unten</span>
+          </div>
         </div>
 
-        {/* Homes Count */}
-        <div className="col-span-1 flex justify-center">
-          <HomesBadge homes={addr.homes ?? 0} />
-        </div>
+        {/* Notes and Customer Tracking Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4 pt-4 border-t border-gray-100">
+          {/* Notes Section */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-2">Notizen</label>
+            <NotesEditor 
+              notes={addr.notes} 
+              onUpdate={onUpdate} 
+              addressId={addr.id} 
+            />
+          </div>
 
-        {/* Status */}
-        <div className="col-span-1 flex justify-center">
-          <StatusBadge status={addr.status} />
-        </div>
-
-        {/* Contract Status */}
-        <div className="col-span-1 flex justify-center">
-          <ContractBadge contractStatus={addr.contractStatus ?? 0} />
-        </div>
-
-        {/* Price */}
-        <div className="col-span-1 flex justify-center">
-          <PriceBadge price={addr.price ?? 0} />
-        </div>
-
-        {/* Notes */}
-        <div className="col-span-4">
-          <NotesEditor 
-            notes={addr.notes} 
-            onUpdate={onUpdate} 
-            addressId={addr.id as unknown as number} 
-          />
+          {/* Customer Tracking Fields */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-2">Kundenkontakt Status</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50/50 rounded-lg">
+              <BooleanCheckbox
+                value={addr.customerMet}
+                onChange={(value) => handleBooleanChange('customerMet', value)}
+                label="Kunde angetroffen"
+                icon={<User className="w-4 h-4" />}
+              />
+              <BooleanCheckbox
+                value={addr.appointmentSet}
+                onChange={(value) => handleBooleanChange('appointmentSet', value)}
+                label="Termin"
+                icon={<Calendar className="w-4 h-4" />}
+              />
+              <BooleanCheckbox
+                value={addr.contractSigned}
+                onChange={(value) => handleBooleanChange('contractSigned', value)}
+                label="Vertragsabschluss"
+                icon={<FileCheck className="w-4 h-4" />}
+                trueColor="text-blue-600"
+              />
+              <BooleanCheckbox
+                value={addr.objectAvailable}
+                onChange={(value) => handleBooleanChange('objectAvailable', value)}
+                label="Objekt vorhanden"
+                icon={<Home className="w-4 h-4" />}
+                trueColor="text-purple-600"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -265,11 +389,11 @@ const TableHeader = memo(() => (
     <div className="col-span-4">Adresse & Anbieter</div>
     <div className="col-span-1 text-center">Homes</div>
     <div className="col-span-1 text-center">Status</div>
-    <div className="col-span-1 text-center">Vertrag</div>
+    <div className="col-span-2 text-center">Vertrag</div>
     <div className="col-span-1 text-center flex items-center justify-center gap-1">
       <DollarSign className="w-4 h-4" aria-hidden="true" /> Preis
     </div>
-    <div className="col-span-4">Notizen</div>
+    <div className="col-span-3 text-center">Details</div>
   </div>
 ));
 
@@ -293,12 +417,22 @@ const RegionHeader = memo(({
     const withContract = rows.filter(addr => (addr.contractStatus ?? 0) > 0).length;
     const inOperation = rows.filter(addr => addr.status?.includes('100 In Betrieb')).length;
 
+    // Customer tracking stats
+    const customersMet = rows.filter(addr => addr.customerMet).length;
+    const appointmentsSet = rows.filter(addr => addr.appointmentSet).length;
+    const contractsSigned = rows.filter(addr => addr.contractSigned).length;
+    const objectsAvailable = rows.filter(addr => addr.objectAvailable).length;
+
     return {
       totalHomes,
       avgPrice,
       addressCount,
       withContract,
       inOperation,
+      customersMet,
+      appointmentsSet,
+      contractsSigned,
+      objectsAvailable,
       addressText: addressCount === 1 ? 'Adresse' : 'Adressen',
     };
   }, [rows]);
@@ -345,6 +479,11 @@ const RegionHeader = memo(({
                 ✓ {regionStats.inOperation} in Betrieb
               </span>
             )}
+            {regionStats.customersMet > 0 && (
+              <span className="text-blue-600 flex items-center gap-1">
+                <User className="w-4 h-4" /> {regionStats.customersMet} Kunden getroffen
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -359,12 +498,18 @@ const RegionHeader = memo(({
           <div className="text-xs md:text-sm text-gray-500">Ø Preis</div>
         </div>
         
-        {/* Contract Rate (Mobile only) */}
-        <div className="lg:hidden text-center">
-          <div className="text-sm font-bold text-emerald-600">
-            {Math.round((regionStats.withContract / regionStats.addressCount) * 100)}%
-          </div>
-          <div className="text-xs text-gray-500">Verträge</div>
+        {/* Customer Tracking Preview */}
+        <div className="hidden md:flex items-center gap-2 text-xs">
+          {regionStats.customersMet > 0 && (
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+              👤 {regionStats.customersMet}
+            </span>
+          )}
+          {regionStats.contractsSigned > 0 && (
+            <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+              ✓ {regionStats.contractsSigned}
+            </span>
+          )}
         </div>
 
         {/* Address Count Badge */}

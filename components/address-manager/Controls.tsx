@@ -3,8 +3,8 @@
 import { Download, Search, Filter, TrendingUp, Building2, FileSpreadsheet } from 'lucide-react';
 import React, { memo, useCallback, useRef, useMemo, ChangeEvent } from 'react';
 
-// Fokus auf die wichtigsten Filter
-type FilterOption = 'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes';
+// Enhanced filter options with customer tracking
+type FilterOption = 'all' | 'kein_vertrag' | 'mit_vertrag' | 'has_notes' | 'customer_met' | 'appointment_set' | 'contract_signed';
 type SortOption = 'PLZ' | 'Region' | 'Adresse' | 'Anzahl der Homes' | 'Preis Standardprodukt (€)';
 
 interface ControlsProps {
@@ -35,7 +35,7 @@ const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
           Address <span className="text-blue-700">Manager</span>
         </h1>
         <p className="text-sm md:text-base text-gray-600 hidden sm:block">
-          Verkaufsadressen nach PLZ verwalten
+          Verkaufsadressen mit Customer Tracking verwalten
         </p>
       </div>
     </div>
@@ -130,12 +130,15 @@ const SearchInput = memo(({
   );
 });
 
-// Enhanced Filter options with better descriptions
+// Enhanced Filter options with customer tracking
 const FILTER_OPTIONS: ReadonlyArray<{ value: FilterOption; label: string; description: string }> = [
   { value: 'all', label: 'Alle Adressen', description: 'Alle Adressen anzeigen ohne Filterung' },
   { value: 'kein_vertrag', label: 'Kein Vertrag', description: 'Adressen ohne Verträge (Spalte I = 0)' },
   { value: 'mit_vertrag', label: 'Mit Vertrag', description: 'Adressen mit Verträgen (Spalte I > 0)' },
   { value: 'has_notes', label: 'Mit Notizen', description: 'Adressen die Notizen haben' },
+  { value: 'customer_met', label: 'Kunde getroffen', description: 'Adressen wo Kunde bereits getroffen wurde' },
+  { value: 'appointment_set', label: 'Termin gesetzt', description: 'Adressen mit gesetzten Terminen' },
+  { value: 'contract_signed', label: 'Vertrag signiert', description: 'Adressen mit signierten Verträgen' },
 ] as const;
 
 // Enhanced Filter Select with accessibility
@@ -327,39 +330,52 @@ export default function Controls(props: ControlsProps) {
         <div className="hidden lg:block"></div>
       </div>
   
-        {/* ------------------------- Enhanced Help Section ------------------------- */}
-        <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-200/50 space-y-3">
-          {/* Icon + Title Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
-              <span className="flex-shrink-0">💡</span>
-              <span>Hilfe & Tipps</span>
+      {/* Enhanced Help Section with Customer Tracking Info */}
+      <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-200/50 space-y-3">
+        {/* Icon + Title Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
+            <span className="flex-shrink-0">💡</span>
+            <span>Hilfe & Tipps</span>
+          </div>
+        </div>
+      
+        {/* Help Text */}
+        <div className="text-blue-700 text-sm leading-relaxed space-y-3">
+          <p>
+            Nutze die <strong>Suche</strong>, um spezifische Adressen zu finden, und wende 
+            anschließend <strong>Filter</strong> an, um nach Vertragsstatus oder Customer-Tracking-Status zu filtern.  
+            Die <strong>PLZ-Ansicht</strong> gruppiert deine Daten optimal für regionale Bearbeitung.
+          </p>
+      
+          <div>
+            <p className="font-medium mb-1">So gehst du vor:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                <strong>CSV oder Excel importieren:</strong> Daten werden gespeichert, Duplikate automatisch entfernt.
+              </li>
+              <li>
+                <strong>Customer Tracking:</strong> Markiere Kundenkontakte, Termine und Vertragsabschlüsse direkt bei jeder Adresse.
+              </li>
+              <li>
+                <strong>Arbeiten:</strong> Sortiere, filtere und notiere wichtige Informationen.
+              </li>
+              <li>
+                <strong>Exportieren:</strong> Speichere deine Änderungen und Customer-Tracking-Daten dauerhaft als CSV.
+              </li>
+            </ol>
+          </div>
+
+          <div className="pt-2 border-t border-blue-200/30">
+            <p className="font-medium mb-1">Customer Tracking Features:</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <span>• Kunde angetroffen (ja/nein)</span>
+              <span>• Termin gesetzt (ja/nein)</span>
+              <span>• Vertragsabschluss (ja/nein)</span>
+              <span>• Objekt vorhanden (ja/nein)</span>
             </div>
           </div>
-        
-          {/* Help Text */}
-          <div className="text-blue-700 text-sm leading-relaxed space-y-3">
-            <p>
-              Nutze die <strong>Suche</strong>, um spezifische Adressen zu finden, und wende 
-              anschließend <strong>Filter</strong> an, um nach Vertragsstatus oder Notizen zu filtern.  
-              Die <strong>PLZ-Ansicht</strong> gruppiert deine Daten optimal für regionale Bearbeitung.
-            </p>
-        
-            <div>
-              <p className="font-medium mb-1">So gehst du vor:</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>
-                  <strong>CSV oder Excel importieren:</strong> Daten werden gespeichert, Duplikate automatisch entfernt.
-                </li>
-                <li>
-                  <strong>Arbeiten:</strong> Sortiere, filtere und notiere wichtige Informationen.
-                </li>
-                <li>
-                  <strong>Exportieren:</strong> Speichere deine Änderungen dauerhaft als CSV.
-                </li>
-              </ol>
-            </div>
-          </div>
+        </div>
 
         {/* Quick Stats Preview */}
         {props.searchTerm && (
