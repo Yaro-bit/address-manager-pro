@@ -348,7 +348,6 @@ export default function Controls(props: ControlsProps) {
               <li><strong>Exportieren:</strong> Speichere deine Änderungen dauerhaft als CSV.</li>
             </ol>
           </div>
-        </div>
 
         
         {/* Quick Stats Preview */}
