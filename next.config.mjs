@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    optimizePackageImports: ['lucide-react']
-  }
+  // No icon optimizations needed
 };
+
 export default nextConfig;

@@ -1,9 +1,9 @@
-import AddressManager from '@/components/address-manager/AddressManager';
+import AddressManagerPro from '../components/AddressManagerPro';
 
-export default function Page() {
+export default function Home() {
   return (
-    <main className="max-w-7xl mx-auto p-6">
-      <AddressManager />
+    <main>
+      <AddressManagerPro />
     </main>
   );
 }
