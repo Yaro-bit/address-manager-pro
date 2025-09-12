@@ -23,31 +23,30 @@ interface ControlsProps {
 
 /* ----------------------------- Subcomponents ----------------------------- */
 
-// Memoized Header component
+// Enhanced App Header with better responsive design
 const AppHeader = memo(({ isNative }: { isNative: boolean }) => {
-  // keeping prop for compatibility; not used internally to avoid breaking callers
-  void isNative;
-
   return (
     <div className="flex items-center gap-3">
-      <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 rounded-2xl flex items-center justify-center text-white">
-        <Building2 className="w-6 h-6" />
+      <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 rounded-2xl flex items-center justify-center text-white flex-shrink-0">
+        <Building2 className="w-5 h-5 md:w-6 md:h-6" aria-hidden="true" />
       </div>
-      <div>
-        <h1 className="text-3xl font-black">
-          Adress <span className="text-blue-700">Manager</span>
+      <div className="min-w-0">
+        <h1 className="text-2xl md:text-3xl font-black text-gray-900 truncate">
+          Address <span className="text-blue-700">Manager</span>
         </h1>
-        <p className="text-gray-600">Verkaufsadressen nach PLZ verwalten</p>
+        <p className="text-sm md:text-base text-gray-600 hidden sm:block">
+          Verkaufsadressen nach PLZ verwalten
+        </p>
       </div>
     </div>
   );
 });
 
-// Memoized Action Buttons component
+// Enhanced Action Buttons with better mobile layout
 const ActionButtons = memo(({
   isImporting,
   allowExport,
-  isNative: _isNative, // kept for compatibility; unused here
+  isNative: _isNative,
   onImportClick,
   onExport,
 }: {
@@ -63,36 +62,35 @@ const ActionButtons = memo(({
   );
 
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
       <button
         onClick={onImportClick}
         disabled={isImporting}
-        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-md disabled:opacity-60 transition-all duration-200 hover:shadow-lg disabled:cursor-not-allowed"
+        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 md:px-6 py-3 rounded-2xl font-bold shadow-md disabled:opacity-60 transition-all duration-200 hover:shadow-lg disabled:cursor-not-allowed min-h-[44px] w-full sm:w-auto flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         type="button"
         aria-label={importButtonText}
+        aria-disabled={isImporting}
       >
-        <span className="inline-flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5" /> {importButtonText}
-        </span>
+        <FileSpreadsheet className="w-5 h-5" aria-hidden="true" />
+        <span className="text-sm md:text-base">{importButtonText}</span>
       </button>
 
       {allowExport && (
         <button
           onClick={onExport}
-          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg"
+          className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 md:px-6 py-3 rounded-2xl font-bold shadow-md transition-all duration-200 hover:shadow-lg min-h-[44px] w-full sm:w-auto flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
           type="button"
           aria-label="CSV exportieren"
         >
-          <span className="inline-flex items-center gap-2">
-            <Download className="w-5 h-5" /> CSV exportieren
-          </span>
+          <Download className="w-5 h-5" aria-hidden="true" />
+          <span className="text-sm md:text-base">CSV exportieren</span>
         </button>
       )}
     </div>
   );
 });
 
-// Memoized Search Input component
+// Enhanced Search Input with better accessibility
 const SearchInput = memo(({
   searchTerm,
   onSearchChange,
@@ -108,30 +106,39 @@ const SearchInput = memo(({
   );
 
   return (
-    <div className="relative md:col-span-2">
-      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+    <div className="relative col-span-full lg:col-span-2">
+      <label htmlFor="search-input" className="sr-only">
+        Suche nach PLZ, Adresse, Region oder Baufirma
+      </label>
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" aria-hidden="true" />
       <input
+        id="search-input"
         type="text"
         placeholder="Suche: PLZ, Adresse, Region, Baufirma..."
         value={searchTerm}
         onChange={handleInputChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300"
+        className="w-full pl-12 pr-4 py-3 md:py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white/80 transition-all duration-200 focus:border-blue-300 text-sm md:text-base min-h-[44px]"
         autoComplete="off"
         spellCheck="false"
+        role="searchbox"
+        aria-describedby="search-help"
       />
+      <div id="search-help" className="sr-only">
+        Durchsuchen Sie Adressen nach Postleitzahl, Adresstext, Region oder Baufirma
+      </div>
     </div>
   );
 });
 
-// Filter options (static) without emojis for consistent UI
-const FILTER_OPTIONS: ReadonlyArray<{ value: FilterOption; label: string }> = [
-  { value: 'all', label: 'Alle Adressen' },
-  { value: 'kein_vertrag', label: 'Kein Vertrag (Spalte I = 0)' },
-  { value: 'mit_vertrag', label: 'Mit Vertrag (Spalte I > 0)' },
-  { value: 'has_notes', label: 'Mit Notizen' },
+// Enhanced Filter options with better descriptions
+const FILTER_OPTIONS: ReadonlyArray<{ value: FilterOption; label: string; description: string }> = [
+  { value: 'all', label: 'Alle Adressen', description: 'Alle Adressen anzeigen ohne Filterung' },
+  { value: 'kein_vertrag', label: 'Kein Vertrag', description: 'Adressen ohne Verträge (Spalte I = 0)' },
+  { value: 'mit_vertrag', label: 'Mit Vertrag', description: 'Adressen mit Verträgen (Spalte I > 0)' },
+  { value: 'has_notes', label: 'Mit Notizen', description: 'Adressen die Notizen haben' },
 ] as const;
 
-// Memoized Filter Select component
+// Enhanced Filter Select with accessibility
 const FilterSelect = memo(({
   filterBy,
   onFilterChange,
@@ -148,15 +155,19 @@ const FilterSelect = memo(({
 
   return (
     <div className="relative">
-      <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+      <label htmlFor="filter-select" className="sr-only">
+        Adressen nach Kategorie filtern
+      </label>
+      <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" aria-hidden="true" />
       <select
+        id="filter-select"
         value={filterBy}
         onChange={handleSelectChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Adressen filtern"
+        className="w-full pl-12 pr-4 py-3 md:py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer text-sm md:text-base min-h-[44px]"
+        aria-label="Adressen nach Kategorie filtern"
       >
         {FILTER_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} title={option.description}>
             {option.label}
           </option>
         ))}
@@ -165,16 +176,16 @@ const FilterSelect = memo(({
   );
 });
 
-// Sort options (static)
-const SORT_OPTIONS: ReadonlyArray<{ value: SortOption; label: string }> = [
-  { value: 'PLZ', label: 'Nach PLZ' },
-  { value: 'Region', label: 'Nach Region' },
-  { value: 'Adresse', label: 'Nach Adresse' },
-  { value: 'Anzahl der Homes', label: 'Nach Anzahl der Homes' },
-  { value: 'Preis Standardprodukt (€)', label: 'Nach Preis' },
+// Enhanced Sort options with clearer labels
+const SORT_OPTIONS: ReadonlyArray<{ value: SortOption; label: string; description: string }> = [
+  { value: 'PLZ', label: 'Nach PLZ', description: 'Nach Postleitzahl gruppieren und sortieren' },
+  { value: 'Region', label: 'Nach Region', description: 'Nach Regionsname gruppieren und sortieren' },
+  { value: 'Adresse', label: 'Nach Adresse', description: 'Alphabetisch nach Adresse sortieren' },
+  { value: 'Anzahl der Homes', label: 'Nach Homes', description: 'Nach Anzahl der Homes sortieren (höchste zuerst)' },
+  { value: 'Preis Standardprodukt (€)', label: 'Nach Preis', description: 'Nach Preis sortieren (höchste zuerst)' },
 ] as const;
 
-// Memoized Sort Select component
+// Enhanced Sort Select with accessibility
 const SortSelect = memo(({
   sortBy,
   onSortChange,
@@ -191,15 +202,19 @@ const SortSelect = memo(({
 
   return (
     <div className="relative">
-      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+      <label htmlFor="sort-select" className="sr-only">
+        Adressen nach verschiedenen Kriterien sortieren
+      </label>
+      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" aria-hidden="true" />
       <select
+        id="sort-select"
         value={sortBy}
         onChange={handleSelectChange}
-        className="w-full pl-12 pr-4 py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer"
-        aria-label="Adressen sortieren"
+        className="w-full pl-12 pr-4 py-3 md:py-4 border border-gray-200/50 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white/80 transition-all duration-200 focus:border-blue-300 cursor-pointer text-sm md:text-base min-h-[44px]"
+        aria-label="Adressen nach verschiedenen Kriterien sortieren"
       >
         {SORT_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} title={option.description}>
             {option.label}
           </option>
         ))}
@@ -208,7 +223,7 @@ const SortSelect = memo(({
   );
 });
 
-// Memoized File Input component
+// Enhanced File Input with proper accessibility
 const FileInput = memo(({
   onFilesSelected,
   inputRef,
@@ -237,11 +252,12 @@ const FileInput = memo(({
       className="hidden"
       onChange={handleFileChange}
       aria-label="Excel- oder CSV-Dateien auswählen"
+      aria-describedby="file-input-help"
     />
   );
 });
 
-/* --------------------------------- Main ---------------------------------- */
+/* --------------------------------- Main Component ---------------------------------- */
 
 export default function Controls(props: ControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -279,9 +295,9 @@ export default function Controls(props: ControlsProps) {
   );
 
   return (
-    <div className="mb-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-8">
+    <div className="mb-6 md:mb-8 bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 p-4 md:p-6 lg:p-8">
       {/* Header and Action Buttons */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-6 mb-6">
         <AppHeader isNative={props.isNative} />
 
         <ActionButtons
@@ -293,16 +309,48 @@ export default function Controls(props: ControlsProps) {
         />
       </div>
 
-      {/* Hidden File Input */}
+      {/* Hidden File Input with accessibility */}
       <FileInput onFilesSelected={handleFilesSelected} inputRef={fileInputRef} />
+      <div id="file-input-help" className="sr-only">
+        Wählen Sie eine oder mehrere Excel- oder CSV-Dateien zum Importieren aus
+      </div>
 
       {/* Search and Filter Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <SearchInput searchTerm={props.searchTerm} onSearchChange={handleSearchChange} />
 
         <FilterSelect filterBy={props.filterBy} onFilterChange={handleFilterChange} />
 
         <SortSelect sortBy={props.sortBy} onSortChange={handleSortChange} />
+        
+        {/* Empty column for better spacing on desktop */}
+        <div className="hidden lg:block"></div>
+      </div>
+
+      {/* Enhanced Help Section */}
+      <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-200/50">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
+            <span className="flex-shrink-0">💡</span>
+            <span>Tipp:</span>
+          </div>
+          <p className="text-blue-700 text-sm leading-relaxed">
+            Nutze die <strong>Suche</strong> um spezifische Adressen zu finden, dann wende <strong>Filter</strong> an um nach Vertragsstatus oder Notizen zu filtern.
+            Die <strong>PLZ-Ansicht</strong> gruppiert optimal für regionale Bearbeitung.
+          </p>
+        </div>
+        
+        {/* Quick Stats Preview */}
+        {props.searchTerm && (
+          <div className="mt-3 pt-3 border-t border-blue-200/30 text-xs text-blue-600">
+            <span className="font-medium">Aktuelle Suche:</span> "{props.searchTerm}"
+            {props.filterBy !== 'all' && (
+              <span className="ml-2">
+                | <span className="font-medium">Filter:</span> {FILTER_OPTIONS.find(opt => opt.value === props.filterBy)?.label}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

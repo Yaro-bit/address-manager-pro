@@ -14,7 +14,7 @@ async function getXLSX() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              Field name mapping                            */
+/*                    Updated Field Mappings for Your Files                   */
 /* -------------------------------------------------------------------------- */
 
 const FIELD_MAPPINGS = {
@@ -24,6 +24,10 @@ const FIELD_MAPPINGS = {
   ano: ['ANO', 'Provider'],
   status: ['Status'],
   homes: ['Anzahl der Homes', 'Homes'],
+  // Your file has separate contract columns - we'll combine them
+  l1OfferSent: ['L1-Angebot gesendet'],
+  salesContract: ['Verkaufsauftrag vorhanden'],
+  // Fallback for files with combined column
   contractStatus: ['Vertrag auf Adresse vorhanden oder L1-Angebot gesendet', 'Contract'],
   price: ['Preis Standardprodukt (€)', 'Price'],
   provisionCategory: ['Provisions-Kategorie'],
@@ -102,17 +106,28 @@ function normalizeAddressKey(s: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               Row → Address                                */
+/*                      Enhanced Address Creation for Your Data                */
 /* -------------------------------------------------------------------------- */
 
 function createAddress(row: Record<string, unknown>, id: number): Address {
-  const homesRaw =
-    (row as any)[FIELD_MAPPINGS.homes[0]] ?? (row as any)[FIELD_MAPPINGS.homes[1]];
-  const contractRaw =
-    (row as any)[FIELD_MAPPINGS.contractStatus[0]] ?? (row as any)[FIELD_MAPPINGS.contractStatus[1]];
-  const priceRaw =
-    (row as any)[FIELD_MAPPINGS.price[0]] ?? (row as any)[FIELD_MAPPINGS.price[1]];
+  const homesRaw = (row as any)[FIELD_MAPPINGS.homes[0]] ?? (row as any)[FIELD_MAPPINGS.homes[1]];
+  const priceRaw = (row as any)[FIELD_MAPPINGS.price[0]] ?? (row as any)[FIELD_MAPPINGS.price[1]];
   const doneRaw = (row as any)[FIELD_MAPPINGS.completionDone[0]] ?? false;
+  
+  // Handle your file's separate contract columns
+  const l1OfferRaw = (row as any)[FIELD_MAPPINGS.l1OfferSent[0]] ?? 0;
+  const salesContractRaw = (row as any)[FIELD_MAPPINGS.salesContract[0]] ?? 0;
+  const combinedContractRaw = (row as any)[FIELD_MAPPINGS.contractStatus[0]] ?? 0;
+  
+  // Calculate contract status: use combined if available, otherwise combine separate columns
+  let contractStatus = 0;
+  if (combinedContractRaw > 0) {
+    contractStatus = safeParseInt(combinedContractRaw, 0);
+  } else {
+    const l1Offer = safeParseInt(l1OfferRaw, 0);
+    const salesContract = safeParseInt(salesContractRaw, 0);
+    contractStatus = Math.max(l1Offer, salesContract);
+  }
 
   return {
     id,
@@ -122,7 +137,7 @@ function createAddress(row: Record<string, unknown>, id: number): Address {
     ano: getFieldValue(row, FIELD_MAPPINGS.ano),
     status: getFieldValue(row, FIELD_MAPPINGS.status),
     homes: safeParseInt(homesRaw, 0),
-    contractStatus: safeParseInt(contractRaw, 0),
+    contractStatus,
     price: safeParseFloat(priceRaw, 0),
     provisionCategory: getFieldValue(row, FIELD_MAPPINGS.provisionCategory),
     buildingCompany: getFieldValue(row, FIELD_MAPPINGS.buildingCompany),
@@ -132,7 +147,7 @@ function createAddress(row: Record<string, unknown>, id: number): Address {
     d2dStart: getFieldValue(row, FIELD_MAPPINGS.d2dStart),
     d2dEnd: getFieldValue(row, FIELD_MAPPINGS.d2dEnd),
     outdoorFee: getFieldValue(row, FIELD_MAPPINGS.outdoorFee),
-    notes: getFieldValue(row, FIELD_MAPPINGS.notes),
+    notes: getFieldValue(row, FIELD_MAPPINGS.notes), // Will be empty for your files
     imported: true,
   };
 }
@@ -160,7 +175,7 @@ function createDuplicateChecker(existing: Address[]) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                   Import                                   */
+/*                    Optimized Import for Large Datasets                     */
 /* -------------------------------------------------------------------------- */
 
 export async function importExcelFiles(
@@ -181,8 +196,12 @@ export async function importExcelFiles(
   const duplicateChecker = createDuplicateChecker(existing);
 
   try {
+    console.log(`Starting import of ${files.length} file(s)`);
+    
     const results = await Promise.all(
       files.map(async (file, fileIndex) => {
+        console.log(`Processing file ${fileIndex + 1}/${files.length}: ${file.name}`);
+        
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, {
           cellDates: true,
@@ -203,10 +222,13 @@ export async function importExcelFiles(
           blankrows: false,
         });
 
+        console.log(`Processing ${rows.length.toLocaleString()} rows from ${file.name}`);
+
         const fileAddresses: Address[] = [];
         let fileDuplicates = 0;
 
-        const CHUNK_SIZE = 100;
+        // Increased chunk size for better performance with large datasets like yours
+        const CHUNK_SIZE = 500;
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk = rows.slice(i, i + CHUNK_SIZE);
 
@@ -220,19 +242,22 @@ export async function importExcelFiles(
               continue;
             }
 
-            // Stable-ish numeric id that won't collide across files in this batch
             const id = baseId + fileIndex * 1_000_000 + fileAddresses.length;
             const address = createAddress(row, id);
             fileAddresses.push(address);
             duplicateChecker.add(addressText);
           }
 
-          if (i % (CHUNK_SIZE * 5) === 0) {
+          // Progress logging for large files like yours (78K+ rows)
+          if (i % (CHUNK_SIZE * 20) === 0) {
+            const progress = Math.round(((i + CHUNK_SIZE) / rows.length) * 100);
+            console.log(`Progress: ${progress}% (${(i + CHUNK_SIZE).toLocaleString()}/${rows.length.toLocaleString()} rows)`);
             // Yield control back to the event loop
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => setTimeout(r, 1));
           }
         }
 
+        console.log(`Completed ${file.name}: ${fileAddresses.length.toLocaleString()} imported, ${fileDuplicates.toLocaleString()} duplicates skipped`);
         return { addresses: fileAddresses, processed: rows.length, duplicates: fileDuplicates };
       })
     );
@@ -242,12 +267,15 @@ export async function importExcelFiles(
       totalProcessed += r.processed;
       duplicates += r.duplicates;
     }
+    
+    console.log(`Import complete: ${allNew.length.toLocaleString()} addresses imported, ${duplicates.toLocaleString()} duplicates skipped`);
   } catch (error) {
     console.error('Error processing Excel files:', error);
     throw new Error(
       `Failed to process Excel files: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   } finally {
+    // Clear caches to prevent memory leaks with large datasets
     parseIntCache.clear();
     parseFloatCache.clear();
   }
@@ -269,9 +297,12 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
   const XLSX = await getXLSX();
 
   try {
+    console.log(`Exporting ${addresses.length.toLocaleString()} addresses to CSV`);
+    
     const data = new Array(addresses.length);
 
-    const CHUNK_SIZE = 500;
+    // Process in chunks for better performance with large datasets
+    const CHUNK_SIZE = 1000;
     for (let i = 0; i < addresses.length; i += CHUNK_SIZE) {
       const chunk = addresses.slice(i, i + CHUNK_SIZE);
 
@@ -279,27 +310,28 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
         const a = chunk[j];
         data[i + j] = {
           'adrcd-subcd': a.addressCode || '',
-          Adresse: a.address || '',
-          Region: a.region || '',
-          ANO: a.ano || '',
-          Status: a.status || '',
+          'Adresse': a.address || '',
+          'Region': a.region || '',
+          'ANO': a.ano || '',
+          'Status': a.status || '',
           'Anzahl der Homes': a.homes ?? 0,
           'Vertrag auf Adresse vorhanden oder L1-Angebot gesendet': a.contractStatus ?? 0,
           'Preis Standardprodukt (€)': a.price ?? 0,
           'Provisions-Kategorie': a.provisionCategory || '',
-          Baufirma: a.buildingCompany || '',
+          'Baufirma': a.buildingCompany || '',
           'KG Nummer': a.kgNumber || '',
           'Fertigstellung Bau (aktueller Plan)': a.completionPlanned || '',
           'Fertigstellung Bau erfolgt': a.completionDone ? 'Yes' : '',
           'D2D-Vertrieb Start': a.d2dStart || '',
           'D2D-Vertrieb Ende': a.d2dEnd || '',
           'Outdoor-Pauschale vorhanden': a.outdoorFee || '',
-          Notes: a.notes || '',
+          'Notes': a.notes || '',
         };
       }
 
-      if (i % (CHUNK_SIZE * 2) === 0) {
-        await new Promise(r => setTimeout(r, 0));
+      // Yield control for large datasets
+      if (i % (CHUNK_SIZE * 5) === 0) {
+        await new Promise(r => setTimeout(r, 1));
       }
     }
 
@@ -314,7 +346,7 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
       RS: '\n',
     });
 
-    // Prepend BOM for Excel compatibility
+    // Prepend BOM for Excel compatibility (fixes German characters)
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
@@ -326,6 +358,8 @@ export async function exportCSVWeb(addresses: Address[]): Promise<void> {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      console.log('CSV export completed successfully');
     } finally {
       URL.revokeObjectURL(url);
     }

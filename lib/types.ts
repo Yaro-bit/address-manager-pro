@@ -1,6 +1,7 @@
+// lib/types.ts
 export type Address = {
   id: number; // unique identifier, required
-  addressCode: string; // external ID
+  addressCode: string; // external ID (adrcd-subcd)
   address: string; // human-readable address
   region: string; // grouping key (e.g. PLZ or region name)
 

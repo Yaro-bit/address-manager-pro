@@ -1,11 +1,25 @@
-/* app/globals.css — Tailwind must come first */
+/* app/globals.css – Complete Update with all discussed improvements */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Put utility-like classes in the utilities layer */
 @layer utilities {
-  /* Disable hover-only transforms on touch (prevents jank on iPad) */
+  /* Essential Touch Targets for mobile devices - 44px minimum */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Enhanced touch targets for buttons and interactive elements */
+  .touch-target-large {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* Disable hover-only transforms on touch devices (prevents iOS jank) */
   @media (hover: none) {
     .touch-no-hover:hover {
       transform: none !important;
@@ -13,17 +27,70 @@
     }
   }
 
-  /* Larger default hit-area for buttons/controls */
-  .touch-target {
-    min-height: 3rem; /* ~48px comfortable touch target */
-  }
-
-  /* Momentum scrolling for iOS areas that may overflow */
+  /* Better momentum scrolling for iOS */
   .ios-scroll {
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
 
-  /* ==== iOS/Safari Lucide-Icon Fixes (global) ==== */
+  /* Enhanced focus indicators for accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white;
+  }
+
+  .focus-ring-inset {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset;
+  }
+
+  /* Skip to content link for screen readers */
+  .skip-link {
+    @apply absolute left-0 top-0 bg-blue-600 text-white px-4 py-2 rounded-br-md z-50 transform -translate-y-full focus:translate-y-0 transition-transform;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .card {
+      @apply border-2 border-gray-800;
+    }
+    
+    .touch-target {
+      @apply border border-gray-600;
+    }
+
+    .status-indicator {
+      @apply border-2;
+    }
+  }
+
+  /* Reduced motion support for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    .transition-all,
+    .transition-colors,
+    .transition-transform,
+    .transition-opacity {
+      transition: none !important;
+    }
+    
+    .animate-pulse,
+    .animate-spin,
+    .animate-bounce {
+      animation: none !important;
+    }
+
+    .hover\:scale-105:hover,
+    .hover\:scale-\[1\.02\]:hover {
+      transform: none !important;
+    }
+  }
+
+  /* Better text rendering for all browsers */
+  .text-rendering-optimized {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Improved Lucide Icon rendering - especially for iOS/Safari */
   .lucide {
     vector-effect: non-scaling-stroke;
     shape-rendering: geometricPrecision;
@@ -32,19 +99,268 @@
     position: relative;
     isolation: isolate;
     transform: translateZ(0);
+    flex-shrink: 0; /* Prevent icon shrinking in flex containers */
   }
 
+  /* iOS/Safari specific icon fixes */
   @supports (-webkit-touch-callout: none) {
     .lucide path {
-      stroke-width: 2.25;
+      stroke-width: 2.25; /* Slightly thicker strokes for iOS */
     }
+    
+    .lucide {
+      -webkit-transform: translateZ(0);
+      -webkit-backface-visibility: hidden;
+    }
+  }
+
+  /* Responsive text utilities */
+  .text-responsive-xs {
+    @apply text-xs sm:text-sm;
+  }
+
+  .text-responsive-sm {
+    @apply text-sm md:text-base;
+  }
+
+  .text-responsive-base {
+    @apply text-base md:text-lg;
+  }
+
+  .text-responsive-lg {
+    @apply text-lg md:text-xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-xl md:text-2xl lg:text-3xl;
+  }
+
+  /* Safe area utilities for iOS devices with notches */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Better scrollbar styling for webkit browsers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
   }
 }
 
-/* Put component-like helpers (with @apply) in the components layer */
 @layer components {
-  /* Card utility (reuse across sections for consistency) */
+  /* Enhanced card utility with better accessibility */
   .card {
-    @apply bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30;
+    @apply bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 focus-ring text-rendering-optimized;
+  }
+
+  /* Interactive card variant */
+  .card-interactive {
+    @apply card hover:shadow-3xl hover:scale-[1.02] transition-all duration-200 cursor-pointer touch-target;
+  }
+
+  /* Button base styles with proper accessibility */
+  .btn-base {
+    @apply touch-target focus-ring font-bold rounded-2xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed text-rendering-optimized;
+  }
+
+  .btn-primary {
+    @apply btn-base bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-800 disabled:hover:from-blue-600 disabled:hover:to-blue-700;
+  }
+
+  .btn-success {
+    @apply btn-base bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-md hover:shadow-lg hover:from-green-700 hover:to-emerald-700 disabled:hover:from-green-600 disabled:hover:to-emerald-600;
+  }
+
+  .btn-secondary {
+    @apply btn-base bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400;
+  }
+
+  .btn-danger {
+    @apply btn-base bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md hover:shadow-lg hover:from-red-700 hover:to-red-800;
+  }
+
+  /* Enhanced form controls with better touch targets */
+  .form-input {
+    @apply w-full px-4 py-3 md:py-4 border border-gray-200/50 rounded-2xl focus-ring bg-white/80 transition-all duration-200 focus:border-blue-300 touch-target text-rendering-optimized;
+  }
+
+  .form-select {
+    @apply form-input cursor-pointer;
+  }
+
+  .form-textarea {
+    @apply form-input resize-none min-h-[100px];
+  }
+
+  /* Status indicator base styles with accessibility */
+  .status-indicator {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold touch-target transition-colors duration-200;
+  }
+
+  .status-success {
+    @apply status-indicator bg-emerald-100 text-emerald-800 border border-emerald-200;
+  }
+
+  .status-warning {
+    @apply status-indicator bg-amber-100 text-amber-800 border border-amber-200;
+  }
+
+  .status-error {
+    @apply status-indicator bg-red-100 text-red-800 border border-red-200;
+  }
+
+  .status-info {
+    @apply status-indicator bg-blue-100 text-blue-800 border border-blue-200;
+  }
+
+  .status-neutral {
+    @apply status-indicator bg-gray-100 text-gray-700 border border-gray-200;
+  }
+
+  /* Grid system helpers for consistent responsive behavior */
+  .grid-mobile-first {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6;
+  }
+
+  .grid-table-responsive {
+    @apply grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6;
+  }
+
+  /* Loading states */
+  .loading-skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+
+  .loading-spinner {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600;
+  }
+
+  /* Better focus management for modal/dialog components */
+  .focus-trap {
+    @apply focus:outline-none;
+  }
+
+  /* Enhanced link styles */
+  .link-primary {
+    @apply text-blue-600 hover:text-blue-800 focus:text-blue-800 underline underline-offset-2 focus-ring rounded transition-colors duration-200;
+  }
+
+  .link-secondary {
+    @apply text-gray-600 hover:text-gray-800 focus:text-gray-800 underline underline-offset-2 focus-ring rounded transition-colors duration-200;
+  }
+
+  /* Progress bar components */
+  .progress-bar {
+    @apply w-full bg-gray-200 rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 transition-all duration-300 ease-out;
+  }
+
+  /* Enhanced table styles for better mobile experience */
+  .table-responsive {
+    @apply overflow-x-auto custom-scrollbar;
+  }
+
+  .table-cell-responsive {
+    @apply px-4 py-3 text-sm break-words;
+  }
+
+  /* Toast/notification styles */
+  .toast {
+    @apply fixed top-4 right-4 z-50 p-4 rounded-2xl shadow-lg border max-w-md transform transition-all duration-300 ease-in-out;
+  }
+
+  .toast-success {
+    @apply toast bg-emerald-50 border-emerald-200 text-emerald-800;
+  }
+
+  .toast-error {
+    @apply toast bg-red-50 border-red-200 text-red-800;
+  }
+
+  .toast-warning {
+    @apply toast bg-amber-50 border-amber-200 text-amber-800;
+  }
+
+  .toast-info {
+    @apply toast bg-blue-50 border-blue-200 text-blue-800;
+  }
+}
+
+/* Custom styles for specific use cases */
+@layer base {
+  /* Better default focus styles for all interactive elements */
+  button:focus,
+  select:focus,
+  input:focus,
+  textarea:focus,
+  [role="button"]:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Improve form element consistency across browsers */
+  select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+  }
+
+  /* Better text selection color */
+  ::selection {
+    background-color: #3b82f6;
+    color: white;
+  }
+
+  ::-moz-selection {
+    background-color: #3b82f6;
+    color: white;
+  }
+
+  /* Ensure body text is always readable */
+  body {
+    @apply text-rendering-optimized;
+    font-feature-settings: 'kern' 1;
+  }
+
+  /* Better default line heights for readability */
+  p, li, dd {
+    line-height: 1.6;
+  }
+
+  /* Ensure headings have proper spacing */
+  h1, h2, h3, h4, h5, h6 {
+    line-height: 1.2;
+    font-weight: 700;
   }
 }
