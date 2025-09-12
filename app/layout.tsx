@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Address Manager Pro',
+  title: 'Address Manager',
   description: 'Manage your address portfolio efficiently',
 };
 
