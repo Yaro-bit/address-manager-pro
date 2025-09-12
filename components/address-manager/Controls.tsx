@@ -332,7 +332,6 @@ export default function Controls(props: ControlsProps) {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
               <span className="flex-shrink-0">💡</span>
-              <span>Tipp:</span>
             </div>
             <p className="text-blue-700 text-sm leading-relaxed">
               Nutze die <strong>Suche</strong> um spezifische Adressen zu finden, dann wende <strong>Filter</strong> an um nach Vertragsstatus oder Notizen zu filtern.
