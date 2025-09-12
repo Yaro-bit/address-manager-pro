@@ -8,7 +8,7 @@ A professional address portfolio management application built with Next.js and T
 
 ## Overview
 
-Address Manager Pro transforms complex address portfolio management into a streamlined, professional workflow. Built for handling large datasets (78,000+ addresses), this application provides enterprise-grade tools for address data analysis, filtering, and export.
+Address Manager Pro transforms complex address portfolio management into a streamlined, professional workflow. Built for handling large datasets (200,000+ addresses), this application provides enterprise-grade tools for address data analysis, filtering, and export.
 
 ## Features
 
