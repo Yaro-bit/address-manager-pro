@@ -57,7 +57,7 @@ const EmptyStateHeader = memo(function EmptyStateHeader({ isNative }: EmptyState
 
   const title = isNative ? 'Bereit für mobilen Import' : 'Bereit für Excel-Import';
   const description = isNative
-    ? 'Nutze die nativen iOS/Android-Funktionen für optimale Performance mit deinen Excel-Dateien und bis zu 78.000+ Adressen.'
+    ? 'Nutze die nativen iOS/Android-Funktionen für optimale Performance mit deinen Excel-Dateien und bis zu 1.000.000+ Adressen.'
     : 'Importiere deine ISP/Telekom-Adressdateien und manage bis zu 78.000+ Adressen mit professionellen Analyse-Tools.';
 
   return (
