@@ -137,16 +137,15 @@ function AppFooter() {
   return (
     <footer className="mt-16 border-t border-gray-200 pt-6 text-sm text-gray-600 text-center">
       <p className="mb-2">
-        © {new Date().getFullYear()} Address Manager Pro. Lizenziert unter{' '}
+        © {new Date().getFullYear()} Address Manager Pro · Veröffentlicht unter{' '}
         <a
           href="https://opensource.org/licenses/MIT"
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline"
         >
-          MIT
+          MIT-Lizenz
         </a>
-        .
       </p>
       <nav className="flex justify-center gap-6">
         <a
@@ -166,7 +165,7 @@ function AppFooter() {
           LinkedIn
         </a>
         <a
-          href="https://github.com/Yaro-bit"
+          href="https://yaro-bit.github.io"
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-blue-600"
@@ -177,6 +176,7 @@ function AppFooter() {
     </footer>
   );
 }
+
 
 /* --------------------------------- Export --------------------------------- */
 export default function EmptyState({ isNative }: EmptyStateProps) {
