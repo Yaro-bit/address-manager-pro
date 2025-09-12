@@ -1,4 +1,4 @@
-import AddressManagerPro from '../components/AddressManager';
+import AddressManagerPro from '../components/address-manager/AddressManager';
 
 export default function Home() {
   return (
